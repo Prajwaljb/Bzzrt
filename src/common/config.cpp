@@ -32,6 +32,7 @@ void printUsage(const char* argv0) {
         "  --debug                    Enable API validation layers\n\n"
         "Mode\n"
         "  (default)                  Guided flicker check: step-by-step, answer Y/N, get a verdict\n"
+        "  --check                    Start the guided check right away (no ENTER needed)\n"
         "  --advanced                 Advanced test bench (implied by --test, --fps and --start)\n\n"
         "Test\n"
         "  --test ID                  Test id (see --list-tests; default stable100)\n"
@@ -117,6 +118,7 @@ bool parseArgs(int argc, char** argv, Config& c, std::string& err) {
         }
         else if (a == "--debug") c.debug = true;
         else if (a == "--advanced") c.advanced = true;
+        else if (a == "--check") c.autostart = true;
         else if (a == "--test") { if (!str(c.test)) return false; c.advanced = true; }
         else if (a == "--fps") { if (!num(c.params.customFps)) return false; c.test = "custom"; c.advanced = true; }
         else if (a == "--start") { c.autostart = true; c.advanced = true; }

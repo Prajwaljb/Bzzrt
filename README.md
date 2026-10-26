@@ -92,7 +92,7 @@ To uninstall the Linux menu entry, delete `~/.local/bin/vrrdiag`, `~/.local/bin/
 ### Guided flicker check (default)
 
 Start `vrrdiag` (or "VRR/LFC Diagnostic" from the app menu, or double-click `vrrdiag.exe` on Windows) and press
-**ENTER**. Eight 10-second tests run one after another on a dark gray screen. During each one press **Y** if you
+**ENTER**, or start it with `vrrdiag --check` to begin right away. Eight 10-second tests run one after another on a dark gray screen. During each one press **Y** if you
 see flicker, **N** if you don't, **S** if unsure. The test advances on its own.
 
 | # | Test | Why |

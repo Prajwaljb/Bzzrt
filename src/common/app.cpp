@@ -192,7 +192,7 @@ void App::startTest(int64_t now, const TestParams& p) {
     refreshInfo();
     lastLogPath_.clear();
     if (logging_) {
-        std::string id = allTests()[testIdx_].id;
+        std::string id = logId_.empty() ? allTests()[testIdx_].id : logId_;
         std::string path =
             cfg_.logDir + "/vrrlog_" + wallClockStamp("%Y%m%d-%H%M%S") + "_" + logPrefix_ + id + ".csv";
         if (log_.open(path, headerLines(), now)) {
@@ -548,9 +548,11 @@ void App::startStep(int index) {
         p.jitterMaxFps = step.jitterMax;
     }
     logPrefix_ = fmt("check%d_", index + 1);
+    if (step.jitterMax > 0) logId_ = fmt("jitter%.0f-%.0f", step.jitterMin, step.jitterMax);
     stepStartNs_ = nowNs();
     startTest(stepStartNs_, p);
     logPrefix_.clear();
+    logId_.clear();
 }
 
 void App::finishStep() {
@@ -561,6 +563,8 @@ void App::finishStep() {
     const TestDef& def = allTests()[testIdx_];
     r.targetFps = def.kind == TestKind::Stable ? def.fpsA : 0.0;
     r.osdHz = osdInput_.empty() ? 0 : std::atoi(osdInput_.c_str());
+    r.latePct = stats_.frames() ? 100.0 * static_cast<double>(stats_.lateFrames()) / stats_.frames() : 0.0;
+    if (r.latePct > kAppLateLimitPct) r.verdict.timing = Timing::AppLate;
     r.csvPath = lastLogPath_;
     stopTest("completed");
     results_.push_back(r);
@@ -573,6 +577,7 @@ void App::finishStep() {
 }
 
 void App::leaveGuided(Mode to) {
+    guidedSignature_.clear();  // the overlay may hold the other mode's content
     if (running_) stopTest("stopped by user");
     if (mode_ == Mode::Step) results_.clear();
     haveResults_ = false;
@@ -675,8 +680,15 @@ void App::buildGuidedOverlay(int64_t now) {
         title(step.title);
         add(step.explain, kGray);
         add("");
-        StepResult live;
-        live.verdict = analyzeTiming(stepSamples_, dinfo_.refreshHz);
+        // Refreshed once per second: every text change costs a redraw that competes with frame timing.
+        if (now - liveStepNs_ >= 1000000000LL || liveStepNs_ < stepStartNs_) {
+            liveStep_.verdict = analyzeTiming(stepSamples_, dinfo_.refreshHz);
+            liveStep_.latePct =
+                stats_.frames() > 50 ? 100.0 * static_cast<double>(stats_.lateFrames()) / stats_.frames() : 0.0;
+            if (liveStep_.latePct > kAppLateLimitPct) liveStep_.verdict.timing = Timing::AppLate;
+            liveStepNs_ = now;
+        }
+        StepResult live = liveStep_;
         const TestDef& def = allTests()[testIdx_];
         live.targetFps = def.kind == TestKind::Stable ? def.fpsA : 0.0;
         if (live.verdict.timing == Timing::NoData) {
@@ -723,6 +735,7 @@ void App::buildGuidedOverlay(int64_t now) {
             const auto& r = results_[i];
             uint32_t c = kWhite;
             if (r.verdict.timing == Timing::Uneven || r.verdict.timing == Timing::FixedRefresh) c = kRed;
+            if (r.verdict.timing == Timing::AppLate) c = kGray;
             if (r.answer == Answer::Yes) c = kYellow;
             const std::string osd = r.osdHz > 0 ? fmt("%d Hz", r.osdHz) : std::string("-");
             add(fmt("%d %-24s %-13s %-11s %s", static_cast<int>(i + 1), steps[i].title, timingLabel(r.verdict.timing),
@@ -740,6 +753,10 @@ void App::buildGuidedOverlay(int64_t now) {
 
     // Lay out with the largest text size that fits on screen.
     const int screenW = std::max(320, binfo_.width), screenH = std::max(240, binfo_.height);
+    std::string signature = fmt("%dx%d %d|", screenW, screenH, static_cast<int>(mode_));
+    for (const auto& it : items) signature += it.text + fmt("#%08x%d|", it.color, it.title ? 1 : 0);
+    if (signature == guidedSignature_) return;  // nothing changed: keep the current overlay version
+    guidedSignature_ = signature;
     const int cardW = std::min(kOverlayW, screenW - 32);
     const int maxH = std::min(kOverlayH, screenH - 32);
     int scale = screenH >= 1300 ? 3 : 2;
@@ -817,7 +834,8 @@ int App::run() {
         if (quit_) break;
         if (pendingAutostart && nowNs() >= autostartAt) {
             pendingAutostart = false;
-            if (!running_) startTest(nowNs(), params_);
+            if (mode_ == Mode::Advanced && !running_) startTest(nowNs(), params_);
+            else if (mode_ == Mode::Intro) startStep(0);
         }
 
         double interval;
@@ -833,11 +851,20 @@ int App::run() {
         const int64_t target = schedTarget + static_cast<int64_t>(std::llround(interval * 1e9));
 
         int64_t now = nowNs();
-        if (now - lastOverlayNs_ >= 100000000LL || lastOverlayNs_ == 0) {
+        // The overlay is redrawn at most every 100 ms, and only when the redraw is expected to finish before
+        // this frame is due, so text updates never delay a frame (forced after 1 s at the latest).
+        const bool overlayDue = lastOverlayNs_ == 0 || now - lastOverlayNs_ >= 100000000LL;
+        const bool overlayFits = now + overlayCostNs_ + renderNormalNs_ + 500000 <= target ||
+                                 now - lastOverlayNs_ >= 1000000000LL;
+        const uint64_t overlayVersion = overlay_.version();
+        const int64_t overlayStart = now;
+        if (overlayDue && overlayFits) {
             if (mode_ == Mode::Advanced) buildOverlay(now);
             else buildGuidedOverlay(now);
             lastOverlayNs_ = now;
         }
+        const bool overlayChanged = overlay_.version() != overlayVersion;
+        const int64_t overlayBuildNs = nowNs() - overlayStart;
 
         ++frame_;
         FrameParams fp;
@@ -853,7 +880,16 @@ int App::run() {
         fp.overlayW = overlay_.usedW();
         fp.overlayH = overlay_.usedH();
 
+        const int64_t renderStart = nowNs();
         const RenderResult rr = backend_.renderFrame(fp);
+        // renderFrame can include waiting for the previous flip; only the part an overlay change adds counts.
+        const int64_t renderNs = nowNs() - renderStart;
+        if (overlayChanged) {
+            const int64_t cost = overlayBuildNs + std::max<int64_t>(0, renderNs - renderNormalNs_);
+            overlayCostNs_ = std::max(cost, overlayCostNs_ - overlayCostNs_ / 8);
+        } else {
+            renderNormalNs_ += (renderNs - renderNormalNs_) / 16;
+        }
         if (rr == RenderResult::Fatal) {
             std::fprintf(stderr, "Fatal rendering error, exiting.\n");
             stopTest("aborted (render error)");

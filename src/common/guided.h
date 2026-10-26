@@ -21,7 +21,9 @@ struct GuidedStep {
 // lowRefresh: the variant for a 60 Hz display mode (VRR range 48-60 Hz), see Platform::setRefreshCeiling.
 const std::vector<GuidedStep>& guidedSteps(bool lowRefresh = false);
 
-enum class Timing { NoData, Even, Uneven, FixedRefresh };
+// AppLate: the app itself missed its own frame times, so the step says nothing about the driver.
+enum class Timing { NoData, Even, Uneven, FixedRefresh, AppLate };
+constexpr double kAppLateLimitPct = 5.0;
 enum class Answer { None, Yes, No, Unsure };
 
 // One display-reported interval and the interval the app asked for, in ms.
@@ -46,6 +48,7 @@ struct StepResult {
     Answer answer = Answer::None;
     double targetFps = 0.0;  // steady steps only, 0 for changing steps
     int osdHz = 0;           // refresh rate the user read off the monitor's OSD, 0 = not entered
+    double latePct = 0.0;    // frames the app presented more than 0.2 ms after their scheduled time
     std::string csvPath;
 };
 

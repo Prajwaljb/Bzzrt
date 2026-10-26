@@ -449,7 +449,7 @@ void KmsBackend::rebuildBase() {
     }
 }
 
-void KmsBackend::compose(Buffer& b, Rect r, const FrameParams& p) {
+void KmsBackend::compose(uint8_t* dstBase, size_t pitch, int originX, int originY, Rect r, const FrameParams& p) {
     const int x0 = std::max(0, r.x), y0 = std::max(0, r.y);
     const int x1 = std::min(width_, r.x + r.w), y1 = std::min(height_, r.y + r.h);
     if (x0 >= x1 || y0 >= y1) return;
@@ -469,7 +469,7 @@ void KmsBackend::compose(Buffer& b, Rect r, const FrameParams& p) {
     const int ox = p.overlayX, oy = p.overlayY, ow = p.overlayW, oh = p.overlayH;
 
     for (int y = y0; y < y1; ++y) {
-        auto* dst = reinterpret_cast<uint32_t*>(b.map + static_cast<size_t>(y) * b.pitch);
+        auto* dst = reinterpret_cast<uint32_t*>(dstBase + static_cast<size_t>(y - originY) * pitch) - originX;
         const uint32_t* src = base_.data() + static_cast<size_t>(y) * width_;
         const bool ovRow = ov && y >= oy && y < oy + oh;
         const bool ctrRow = p.frameCounter && y >= cy && y < cy + ch;
@@ -507,6 +507,31 @@ void KmsBackend::compose(Buffer& b, Rect r, const FrameParams& p) {
             dst[x] = v;
         }
     }
+}
+
+bool KmsBackend::blitOverlay(Buffer& b, Rect r, const FrameParams& p) {
+    // Only the static patterns are cacheable, and the frame counter must not overlap the overlay.
+    if (p.pattern == kPatMoving || !p.overlayVisible || r.w <= 0 || r.h <= 0) return false;
+    if (r.x < 0 || r.y < 0 || r.x + r.w > width_ || r.y + r.h > height_) return false;
+    if (p.frameCounter) {
+        int cx, cy, cw, ch;
+        counterRect(width_, cx, cy, cw, ch);
+        if (cx < r.x + r.w && r.x < cx + cw && cy < r.y + r.h && r.y < cy + ch) return false;
+    }
+    const bool same = ovCacheVersion_ == p.overlayVersion && ovCachePattern_ == p.pattern && ovCache10_ == is10_ &&
+                      ovCacheRect_.x == r.x && ovCacheRect_.y == r.y && ovCacheRect_.w == r.w && ovCacheRect_.h == r.h;
+    if (!same) {
+        ovCache_.resize(static_cast<size_t>(r.w) * r.h);
+        compose(reinterpret_cast<uint8_t*>(ovCache_.data()), static_cast<size_t>(r.w) * 4, r.x, r.y, r, p);
+        ovCacheRect_ = r;
+        ovCacheVersion_ = p.overlayVersion;
+        ovCachePattern_ = p.pattern;
+        ovCache10_ = is10_;
+    }
+    for (int y = 0; y < r.h; ++y)
+        std::memcpy(b.map + static_cast<size_t>(r.y + y) * b.pitch + static_cast<size_t>(r.x) * 4,
+                    ovCache_.data() + static_cast<size_t>(y) * r.w, static_cast<size_t>(r.w) * 4);
+    return true;
 }
 
 RenderResult KmsBackend::renderFrame(const FrameParams& p) {
@@ -570,7 +595,9 @@ RenderResult KmsBackend::renderFrame(const FrameParams& p) {
         const bool ovNeeded = p.overlayVisible ? (b.overlayVersion != p.overlayVersion || !b.overlayShown)
                                                : b.overlayShown;
         if (ovNeeded) {
-            rects.push_back(b.overlayRect);
+            // The old area is restored first (skipped when it is the same rect), then the new one is drawn.
+            const Rect& o = b.overlayRect;
+            if (o.x != ovRect.x || o.y != ovRect.y || o.w != ovRect.w || o.h != ovRect.h) rects.push_back(o);
             rects.push_back(ovRect);
         }
     }
@@ -578,7 +605,10 @@ RenderResult KmsBackend::renderFrame(const FrameParams& p) {
     b.overlayVersion = p.overlayVersion;
     b.overlayShown = p.overlayVisible;
     b.dynamic = dyn;
-    for (const Rect& r : rects) compose(b, r, p);
+    for (const Rect& r : rects) {
+        const bool isOverlay = r.x == ovRect.x && r.y == ovRect.y && r.w == ovRect.w && r.h == ovRect.h;
+        if (!(isOverlay && blitOverlay(b, r, p))) compose(b, r, p);
+    }
 
     // The previous flip must complete before the next commit can be queued.
     waitForFlip();

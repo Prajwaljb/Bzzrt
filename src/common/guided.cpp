@@ -33,9 +33,9 @@ const std::vector<GuidedStep>& guidedSteps(bool lowRefresh) {
         {"stable55", "55 FPS, steady", "Near the top of the reduced 48-60 Hz range.", false},
         {"stable50", "50 FPS, steady", "Just above the 48 Hz minimum.", false},
         {"stable47", "47 FPS, steady",
-         "Just below the minimum. At a 60 Hz ceiling frames cannot be repeated, so the monitor runs at its "
-         "lowest refresh rate.", false},
-        {"stable45", "45 FPS, steady", "Below the minimum, panel held at its lowest refresh rate.", false},
+         "Just below the minimum. At a 60 Hz ceiling frames cannot be repeated: the monitor either runs at its "
+         "lowest refresh rate or the driver switches to a fixed 60 Hz.", false},
+        {"stable45", "45 FPS, steady", "Below the minimum, frames cannot be repeated at a 60 Hz ceiling.", false},
         {"stable30", "30 FPS, steady", "Each frame can be shown exactly twice (60 Hz).", false},
         {"switch47-50", "Switching 50 <-> 47 FPS", "Crosses the 48 Hz minimum every second.", true},
         {"jitter45-55", "Changing 45-55 FPS", "Random frame rate around the 48 Hz minimum.", true, 45, 55},
@@ -91,12 +91,15 @@ OsdReading interpretOsd(double fps, int osdHz, double refreshHz, double vrrMinHz
     if (fps <= 0 || osdHz <= 0) return r;
     const double h = osdHz;
     const int k = static_cast<int>(std::lround(h / fps));
-    // OSDs round to whole Hz and some average over a moment, so allow a few Hz of slack.
-    const bool multiple = k >= 1 && std::fabs(h - k * fps) <= std::max(2.0, 0.02 * h);
+    // OSDs round to whole Hz, so allow a little slack (48 vs 50 Hz must still count as different).
+    const bool multiple = k >= 1 && std::fabs(h - k * fps) <= std::max(1.5, 0.01 * h);
     const bool fixed = refreshHz > 0 && std::fabs(h - refreshHz) <= 2.0;
     // Below the minimum the panel cannot follow the frame rate, so a reading at the minimum is the panel holding
     // frames there, even when it is within rounding of the frame rate itself (47 FPS vs 48 Hz).
-    if (fps < vrrMinHz && std::fabs(h - vrrMinHz) <= 3.0 && !fixed) {
+    // Above the minimum, a reading at the minimum means frames arrive later than the panel can wait.
+    const bool atMin = fps < vrrMinHz ? std::fabs(h - vrrMinHz) <= 3.0
+                                      : fps > vrrMinHz + 1.0 && std::fabs(h - vrrMinHz) <= 1.5;
+    if (atMin && !fixed) {
         r.fit = OsdFit::AtMinimum;
     } else if (multiple) {
         r.fit = fixed ? OsdFit::Ambiguous : OsdFit::Multiple;
@@ -145,13 +148,35 @@ std::string osdSentence(double fps, int osdHz, double refreshHz, double vrrMinHz
                           osdHz, fps);
             break;
         case OsdFit::AtMinimum:
-            std::snprintf(buf, sizeof buf,
-                          "%d Hz = the monitor's minimum: frames below it are held at the lowest refresh rate.",
-                          osdHz);
+            if (fps < vrrMinHz)
+                std::snprintf(buf, sizeof buf,
+                              "%d Hz = the monitor's minimum: frames below it are held at the lowest refresh rate.",
+                              osdHz);
+            else
+                std::snprintf(buf, sizeof buf,
+                              "%d Hz = the monitor's minimum although %.0f FPS is above it: frames arrive later than "
+                              "the panel can wait, so it refreshes on its own in between.",
+                              osdHz, fps);
             break;
-        case OsdFit::Mismatch:
-            std::snprintf(buf, sizeof buf, "%d Hz does not fit %.0f FPS (not a whole multiple of it).", osdHz, fps);
+        case OsdFit::Mismatch: {
+            const double frameMs = 1000.0 / fps;
+            const double holdMs = vrrMinHz > 0 ? 1000.0 / vrrMinHz : 0.0;
+            const double restMs = frameMs - holdMs;
+            if (fps < vrrMinHz && restMs > 0.5 && std::fabs(1000.0 / restMs - osdHz) <= std::max(3.0, 0.05 * osdHz))
+                // The panel waited as long as it can, refreshed on its own, then the next frame came: no LFC.
+                std::snprintf(buf, sizeof buf,
+                              "%d Hz: each %.1f ms frame is split into a %.1f ms and a %.1f ms refresh (%.0f and %d Hz) "
+                              "instead of being shown twice evenly. No proper frame doubling.",
+                              osdHz, frameMs, holdMs, restMs, vrrMinHz, osdHz);
+            else if (osdHz > fps)
+                std::snprintf(buf, sizeof buf,
+                              "%d Hz does not fit %.0f FPS: some refreshes are only ~%.1f ms long, so the panel "
+                              "refreshes unevenly.",
+                              osdHz, fps, 1000.0 / osdHz);
+            else
+                std::snprintf(buf, sizeof buf, "%d Hz does not fit %.0f FPS (not a whole multiple of it).", osdHz, fps);
             break;
+        }
         default: return "";
     }
     return buf;
@@ -162,6 +187,7 @@ const char* timingLabel(Timing t) {
         case Timing::Even: return "EVEN";
         case Timing::Uneven: return "UNEVEN";
         case Timing::FixedRefresh: return "FIXED REFRESH";
+        case Timing::AppLate: return "APP LATE";
         default: return "NO DATA";
     }
 }
@@ -186,6 +212,9 @@ std::string timingSentence(const GuidedStep& step, const StepResult& r) {
             return fmt("Frames reached the screen when requested (%.0f%% on time).", v.onTimePct);
         case Timing::FixedRefresh:
             return "Frames were snapped to the fixed refresh rate: VRR was NOT active.";
+        case Timing::AppLate:
+            return fmt("The app itself missed %.0f%% of its frame times, so this test says nothing about the driver.",
+                       r.latePct);
         case Timing::Uneven:
             if (!step.changing && v.commonB > 0)
                 return fmt("Frames alternated between ~%.0f and ~%.0f ms instead of an even %.1f ms.", v.commonA,
@@ -200,13 +229,17 @@ std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results
     const auto& steps = guidedSteps(lowRefresh);
     std::vector<std::string> out;
     std::vector<int> evenSteady, evenChanging, uneven, unknown, noVrr, unevenQuiet;
-    std::vector<int> osdMultiplied, osdFixed, osdMismatch;
+    std::vector<int> osdMultiplied, osdFixed, osdMismatch, noLfc, appLate;
     int answered = 0, vrrProof = 0, noData = 0, osdProof = 0;
     const double period = refreshHz > 0 ? 1000.0 / refreshHz : 0.0;
 
     for (size_t i = 0; i < results.size() && i < steps.size(); ++i) {
         const auto& r = results[i];
         const Timing t = r.verdict.timing;
+        if (t == Timing::AppLate) {
+            appLate.push_back(static_cast<int>(i));
+            continue;  // neither the timing nor the flicker answer can be attributed
+        }
         if (t == Timing::NoData) ++noData;
         if (t == Timing::Uneven && r.answer != Answer::Yes) unevenQuiet.push_back(static_cast<int>(i));
         // A steady in-range rate shown at even intervals that are not a multiple of the fixed refresh
@@ -215,28 +248,45 @@ std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results
             const double ms = 1000.0 / r.targetFps;
             const bool multiple = period > 0 && std::fabs(ms - std::round(ms / period) * period) < 0.7;
             if (t == Timing::Even && !multiple) ++vrrProof;
-            if (t == Timing::FixedRefresh || (t == Timing::Uneven && !multiple)) noVrr.push_back(static_cast<int>(i));
+            // Uneven is not the same as fixed: only quantization to the fixed refresh period means VRR was off.
+            if (t == Timing::FixedRefresh) noVrr.push_back(static_cast<int>(i));
         }
         if (!steps[i].changing && r.osdHz > 0) {
             const OsdReading o = interpretOsd(r.targetFps, r.osdHz, refreshHz, vrrMinHz);
-            if (o.fit == OsdFit::Multiple) {
-                ++osdProof;
-                if (o.multiple > 1) osdMultiplied.push_back(static_cast<int>(i));
-            }
+            // Any steady reading away from the fixed refresh rate shows the panel's refresh rate is varying.
+            if (o.fit == OsdFit::Multiple || o.fit == OsdFit::AtMinimum || o.fit == OsdFit::Mismatch) ++osdProof;
+            if (o.fit == OsdFit::Multiple && o.multiple > 1) osdMultiplied.push_back(static_cast<int>(i));
             if (o.fit == OsdFit::FixedRefresh) osdFixed.push_back(static_cast<int>(i));
-            if (o.fit == OsdFit::Mismatch) osdMismatch.push_back(static_cast<int>(i));
+            // Readings above the frame rate are explained (uneven or split refreshes); lower ones are not.
+            if (o.fit == OsdFit::Mismatch && r.osdHz < r.targetFps) osdMismatch.push_back(static_cast<int>(i));
+        }
+        // Even frames from the app do not mean even refreshes when the panel cannot follow them: below the minimum
+        // (or when its readout is irregular) the driver must repeat frames, and the readout shows whether it did.
+        bool panelIrregular = false;
+        if (!steps[i].changing && r.targetFps > 0) {
+            const OsdFit o = interpretOsd(r.targetFps, r.osdHz, refreshHz, vrrMinHz).fit;
+            panelIrregular = o == OsdFit::Mismatch || o == OsdFit::AtMinimum;
+            if (r.targetFps < vrrMinHz &&
+                (panelIrregular || (o == OsdFit::None && t == Timing::Uneven)))
+                noLfc.push_back(static_cast<int>(i));
         }
         if (r.answer != Answer::None && r.answer != Answer::Unsure) ++answered;
         if (r.answer != Answer::Yes) continue;
-        if (t == Timing::Even) (steps[i].changing ? evenChanging : evenSteady).push_back(static_cast<int>(i));
+        if (t == Timing::Even && panelIrregular) uneven.push_back(static_cast<int>(i));
+        else if (t == Timing::Even) (steps[i].changing ? evenChanging : evenSteady).push_back(static_cast<int>(i));
         else if (t == Timing::NoData) unknown.push_back(static_cast<int>(i));
         else uneven.push_back(static_cast<int>(i));
     }
 
+    if (!appLate.empty())
+        out.push_back("NOT COUNTED: in step " + stepList(appLate) + " the app itself could not keep up and missed its "
+                      "own frame times, so those results say nothing about the monitor or the driver. Please report "
+                      "this; it is a problem in this tool.");
+
     // 1. Was VRR actually in use?
     if (vrrProof == 0 && osdProof > 0 && osdFixed.empty()) {
-        out.push_back("VRR WAS ACTIVE according to your monitor's readout: it refreshed at the frame rate or a whole "
-                      "multiple of it, which a fixed refresh rate cannot do.");
+        out.push_back("VRR WAS ACTIVE according to your monitor's readout: its refresh rate changed with the frame "
+                      "rate instead of staying at the fixed refresh rate.");
     } else if (noData == static_cast<int>(results.size())) {
         out.push_back("This system cannot report when frames reach the screen (common with X11 / XWayland), so only "
                       "your own observations count. Try the Wayland session on Linux, or Windows.");
@@ -260,7 +310,14 @@ std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results
                       "): the monitor showed a whole multiple of the frame rate, e.g. 180 Hz at 90 FPS. The driver "
                       "shows each frame several times to keep the refresh rate high. This is VRR working; the Hz "
                       "reading is not supposed to equal the FPS, and it is not a fault.");
-    if (!osdFixed.empty())
+    if (!noLfc.empty() && !lowRefresh)
+        out.push_back("NO PROPER FRAME DOUBLING below the VRR minimum (step " + stepList(noLfc) +
+                      "): instead of showing each frame twice at even intervals, the panel waited as long as it can "
+                      "and then refreshed on its own, so the refresh rate swung frame to frame (the OSD jumps). Those "
+                      "swings make many monitors flicker. The cause is this system's graphics driver / compositor, "
+                      "not the monitor. Workaround: keep the frame rate comfortably above the minimum, e.g. an FPS "
+                      "cap of 60.");
+    if (!osdFixed.empty() && !lowRefresh)
         out.push_back("Your monitor stayed at its fixed refresh rate in step " + stepList(osdFixed) +
                       ", so VRR was not active there.");
     if (!osdMismatch.empty())
@@ -271,15 +328,40 @@ std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results
     // 2. Where did flicker appear, and was the computer's timing clean there?
     if (lowRefresh) {
         // Uneven timing near the floor is the point of this test, so flicker is read against the test, not the timing.
-        std::vector<int> flicker;
-        for (size_t i = 0; i < results.size(); ++i)
-            if (results[i].answer == Answer::Yes) flicker.push_back(static_cast<int>(i));
+        // What the driver did below the minimum is measured, not assumed: it may hold frames at the minimum or
+        // switch VRR off and run at the fixed refresh rate instead.
+        std::vector<int> flicker, belowFixed, belowMin;
+        double lowestEven = 0;
+        for (size_t i = 0; i < results.size() && i < steps.size(); ++i) {
+            const auto& r = results[i];
+            if (r.answer == Answer::Yes) flicker.push_back(static_cast<int>(i));
+            if (steps[i].changing || r.targetFps <= 0) continue;
+            const OsdFit osd = interpretOsd(r.targetFps, r.osdHz, refreshHz, vrrMinHz).fit;
+            if (r.targetFps < vrrMinHz) {
+                if (r.verdict.timing == Timing::FixedRefresh || osd == OsdFit::FixedRefresh)
+                    belowFixed.push_back(static_cast<int>(i));
+                else if (osd == OsdFit::AtMinimum || r.verdict.timing == Timing::Uneven)
+                    belowMin.push_back(static_cast<int>(i));
+            } else if (r.verdict.timing == Timing::Even && r.answer != Answer::Yes &&
+                       (lowestEven == 0 || r.targetFps < lowestEven)) {
+                lowestEven = r.targetFps;
+            }
+        }
+        if (lowestEven > 0)
+            out.push_back(fmt("The monitor ran a steady %.0f Hz, close to its minimum, without flicker.", lowestEven));
+        if (!belowFixed.empty())
+            out.push_back("Below the minimum the driver switched VRR off and ran the monitor at a fixed refresh rate "
+                          "(step " + stepList(belowFixed) + "), so the monitor never dropped to its minimum the way it "
+                          "does on Linux. This system cannot recreate the Linux condition; the Linux flicker most likely comes from "
+                          "a refresh pattern this driver never produces.");
         if (answered == 0 && flicker.empty())
             out.push_back("No answers were recorded, so there is nothing to conclude about flicker.");
+        else if (flicker.empty() && !belowMin.empty())
+            out.push_back("LOW-REFRESH TEST: no flicker, even with the monitor held at its minimum refresh rate (step " +
+                          stepList(belowMin) + "), the situation in which Linux flickers. The monitor copes with low "
+                          "refresh rates, so the Linux flicker most likely comes from how Linux drives it.");
         else if (flicker.empty())
-            out.push_back("LOW-REFRESH TEST: no flicker, even with the monitor held near its minimum refresh rate (the "
-                          "situation in which Linux flickers). The monitor copes with low refresh rates, so the Linux "
-                          "flicker most likely comes from how Linux drives it, not from a faulty display.");
+            out.push_back("LOW-REFRESH TEST: no flicker in any step. Nothing here points to a faulty display.");
         else
             out.push_back("LOW-REFRESH TEST: flicker on this system too when the monitor runs near its minimum "
                           "refresh rate (step " + stepList(flicker) + "). So the flicker is how this monitor behaves at "
@@ -304,15 +386,15 @@ std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results
                           "necessarily a defect. If Windows shows the same, it is the monitor's normal behaviour.");
         if (!uneven.empty())
             out.push_back("POINTS TO THIS COMPUTER: flicker in step " + stepList(uneven) +
-                          ", where this computer delivered UNEVEN frame timing (its graphics driver / compositor did "
-                          "not pace the frames cleanly). That flicker is caused on the computer side, not proof of a "
+                          ", where the frames or the panel's refreshes were UNEVEN (the graphics driver / compositor "
+                          "did not pace them cleanly). That flicker is caused on the computer side, not proof of a "
                           "faulty display. If those steps look fine on Windows, the monitor is OK.");
         if (!unknown.empty())
             out.push_back("Flicker in step " + stepList(unknown) +
                           " cannot be attributed: the system reported no display timing there.");
     }
 
-    if (!unevenQuiet.empty())
+    if (!unevenQuiet.empty() && !lowRefresh)
         out.push_back("Note: this computer also delivered uneven timing in step " + stepList(unevenQuiet) +
                       ", where you did not report flicker.");
     out.push_back("Software cannot see what the panel itself does. The monitor's own refresh-rate readout (OSD) is "

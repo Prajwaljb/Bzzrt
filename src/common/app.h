@@ -96,7 +96,13 @@ private:
     std::vector<StepResult> results_;
     std::string reportPath_;
     std::string logPrefix_;
+    std::string logId_;  // overrides the test id in CSV file names (guided steps with custom parameters)
     int overlayX_ = 16, overlayY_ = 16;
+    StepResult liveStep_;          // live verdict on the step screen, refreshed once per second
+    int64_t liveStepNs_ = 0;
+    std::string guidedSignature_;  // content of the last guided overlay; unchanged text is not redrawn
+    int64_t overlayCostNs_ = 0;    // extra time an overlay change adds to a frame (build + extra render), decays slowly
+    int64_t renderNormalNs_ = 0;   // average renderFrame time without an overlay change
 
     std::string message_;
     int64_t messageUntil_ = 0;

@@ -4,3 +4,4 @@ dist/
 *.csv
 vrrdiag-report-*.txt
 winrep*.txt
+linrep*.txt

@@ -70,7 +70,12 @@ private:
     void handleEvents(int timeoutMs);
     void waitForFlip();
     void rebuildBase();
-    void compose(Buffer& b, Rect r, const FrameParams& p);
+    // Draws rect r of the frame into dst, whose top-left pixel is frame position (originX, originY).
+    void compose(uint8_t* dst, size_t pitch, int originX, int originY, Rect r, const FrameParams& p);
+    void compose(Buffer& b, Rect r, const FrameParams& p) { compose(b.map, b.pitch, 0, 0, r, p); }
+    // Copies the overlay area from a cache that is blended once per overlay version, instead of
+    // blending every pixel again for each of the three buffers. False when the cache cannot be used.
+    bool blitOverlay(Buffer& b, Rect r, const FrameParams& p);
     void restore();
 
     TtyInput tty_;
@@ -99,6 +104,11 @@ private:
     bool vrrActive_ = true;
     int modeIdx_ = kModeVrr;
     std::vector<uint32_t> base_;
+    std::vector<uint32_t> ovCache_;
+    Rect ovCacheRect_;
+    uint64_t ovCacheVersion_ = ~0ull;
+    int ovCachePattern_ = -1;
+    bool ovCache10_ = false;
     int basePattern_ = -1;
     const ImageData* image_ = nullptr;
     std::vector<DisplayTimingSample> flips_;
