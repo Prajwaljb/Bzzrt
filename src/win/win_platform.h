@@ -31,6 +31,8 @@ public:
     WindowMode windowMode() const override { return mode_; }
     void setWindowMode(WindowMode m) override;
     DisplayInfo displayInfo() override;
+    bool canLimitRefresh() const override { return true; }
+    bool setRefreshCeiling(double hz) override;
 
 private:
     static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);

@@ -18,7 +18,8 @@ struct GuidedStep {
     double jitterMin = 0, jitterMax = 0;  // jitter steps override the TestParams range
 };
 
-const std::vector<GuidedStep>& guidedSteps();
+// lowRefresh: the variant for a 60 Hz display mode (VRR range 48-60 Hz), see Platform::setRefreshCeiling.
+const std::vector<GuidedStep>& guidedSteps(bool lowRefresh = false);
 
 enum class Timing { NoData, Even, Uneven, FixedRefresh };
 enum class Answer { None, Yes, No, Unsure };
@@ -50,21 +51,23 @@ struct StepResult {
 
 // What the monitor's own refresh readout (OSD) means at a steady frame rate. With VRR the panel
 // refreshes at the frame rate or a whole multiple of it (the driver may show each frame k times).
-enum class OsdFit { None, Multiple, Ambiguous, FixedRefresh, Mismatch };
+enum class OsdFit { None, Multiple, Ambiguous, FixedRefresh, AtMinimum, Mismatch };
 struct OsdReading {
     OsdFit fit = OsdFit::None;
     int multiple = 0;  // k for Multiple / Ambiguous
 };
-OsdReading interpretOsd(double fps, int osdHz, double refreshHz);
+// vrrMinHz: below it, a reading at the minimum means the monitor is holding frames at its lowest rate.
+OsdReading interpretOsd(double fps, int osdHz, double refreshHz, double vrrMinHz = 0);
 // e.g. "90 or 180 Hz": the readings that are consistent with VRR at this frame rate.
 std::string osdExpected(double fps, double vrrMinHz, double vrrMaxHz);
-std::string osdSentence(double fps, int osdHz, double refreshHz);
+std::string osdSentence(double fps, int osdHz, double refreshHz, double vrrMinHz = 0);
 
 const char* timingLabel(Timing t);
 const char* answerLabel(Answer a);
 // Short explanation of a verdict, e.g. "frames alternated 26 / 18 ms instead of an even 22.2 ms".
 std::string timingSentence(const GuidedStep& step, const StepResult& r);
 // Paragraphs of the final conclusion.
-std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results, double vrrMinHz, double refreshHz);
+std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results, double vrrMinHz, double refreshHz,
+                                          bool lowRefresh = false);
 
 }  // namespace vrr

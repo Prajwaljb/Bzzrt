@@ -207,8 +207,9 @@ bool DxgiBackendBase::setExclusiveFullscreen(bool on) {
         DXGI_MODE_DESC want{};
         want.Width = dm.dmPelsWidth;
         want.Height = dm.dmPelsHeight;
-        want.RefreshRate.Numerator = dm.dmDisplayFrequency;
-        want.RefreshRate.Denominator = 1;
+        want.RefreshRate.Numerator = exclusiveHz_ > 0 ? static_cast<UINT>(exclusiveHz_ * 1000.0 + 0.5)
+                                                      : dm.dmDisplayFrequency * 1000u;
+        want.RefreshRate.Denominator = 1000;
         want.Format = format();
         DXGI_MODE_DESC closest{};
         if (SUCCEEDED(out->FindClosestMatchingMode(&want, &closest, nullptr))) swap_->ResizeTarget(&closest);

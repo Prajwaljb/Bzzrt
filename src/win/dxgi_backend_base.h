@@ -36,6 +36,8 @@ public:
 
     // Enters/leaves DXGI exclusive fullscreen at the desktop's current refresh rate.
     bool setExclusiveFullscreen(bool on);
+    // Refresh rate for the next exclusive-fullscreen switch; 0 = keep the desktop's rate.
+    void setExclusiveRefresh(double hz) { exclusiveHz_ = hz; }
 
 protected:
     static constexpr UINT kBufferCount = 3;
@@ -68,6 +70,7 @@ protected:
     bool forceResize_ = false;
     bool exclusiveWanted_ = false, exclusiveActive_ = false;
     bool debug_ = false;
+    double exclusiveHz_ = 0.0;
 
 private:
     void applyColorSpace();

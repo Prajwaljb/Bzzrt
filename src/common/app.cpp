@@ -25,6 +25,7 @@ std::string fmt(const char* f, ...) {
 
 const double kDurations[] = {0, 10, 30, 60, 120, 300, 600};
 constexpr int64_t kStepMinNs = 10000000000LL;
+constexpr double kLowRefreshHz = 60.0;
 
 constexpr uint32_t kWhite = rgba8(235, 235, 235);
 constexpr uint32_t kGray = rgba8(160, 160, 160);
@@ -474,6 +475,22 @@ void App::handleGuidedKey(const KeyEvent& k) {
             else quit_ = true;
             break;
         case Key::Tab: leaveGuided(Mode::Advanced); break;
+        case Key::L:
+            if (mode_ == Mode::Step || !platform_.canLimitRefresh()) break;
+            if (lowHz_ > 0) {
+                platform_.setRefreshCeiling(0);
+                platform_.setWindowMode(WindowMode::Borderless);
+                lowHz_ = 0;
+            } else if (platform_.setRefreshCeiling(kLowRefreshHz)) {
+                lowHz_ = kLowRefreshHz;
+                lowStatus_.clear();
+            } else {
+                lowStatus_ = "Could not switch to a 60 Hz exclusive fullscreen mode on this system.";
+            }
+            // The step list differs between the two variants, so earlier results no longer apply.
+            results_.clear();
+            mode_ = Mode::Intro;
+            break;
         case Key::Enter:
         case Key::Space:
             if (mode_ != Mode::Step) {
@@ -491,6 +508,7 @@ void App::handleGuidedKey(const KeyEvent& k) {
             }
             break;
         case Key::Fullscreen: {
+            if (lowHz_ > 0) break;  // the low-refresh test needs its exclusive 60 Hz mode
             // Cycles windowed -> borderless -> exclusive (Windows) -> windowed.
             const auto modes = platform_.supportedWindowModes();
             auto it = std::find(modes.begin(), modes.end(), platform_.windowMode());
@@ -506,7 +524,7 @@ void App::handleGuidedKey(const KeyEvent& k) {
             break;
         default:
             if (mode_ == Mode::Step && keyDigit(k.key) >= 0 && osdInput_.size() < 3 &&
-                !guidedSteps()[stepIdx_].changing) {
+                !guidedSteps(lowHz_ > 0)[stepIdx_].changing) {
                 osdInput_ += static_cast<char>('0' + keyDigit(k.key));
                 // Typing after answering keeps the step open a little longer.
                 if (answer_ != Answer::None) answerNs_ = nowNs();
@@ -516,7 +534,7 @@ void App::handleGuidedKey(const KeyEvent& k) {
 }
 
 void App::startStep(int index) {
-    const GuidedStep& step = guidedSteps()[index];
+    const GuidedStep& step = guidedSteps(lowHz_ > 0)[index];
     if (running_) stopTest("completed");
     mode_ = Mode::Step;
     stepIdx_ = index;
@@ -546,7 +564,7 @@ void App::finishStep() {
     r.csvPath = lastLogPath_;
     stopTest("completed");
     results_.push_back(r);
-    if (stepIdx_ + 1 < static_cast<int>(guidedSteps().size())) {
+    if (stepIdx_ + 1 < static_cast<int>(guidedSteps(lowHz_ > 0).size())) {
         startStep(stepIdx_ + 1);
     } else {
         mode_ = Mode::Results;
@@ -562,13 +580,15 @@ void App::leaveGuided(Mode to) {
 }
 
 void App::writeReport() {
-    const auto& steps = guidedSteps();
+    const auto& steps = guidedSteps(lowHz_ > 0);
     std::vector<std::string> lines;
     lines.push_back("VRR flicker check - " + wallClockStamp("%Y-%m-%d %H:%M:%S"));
     lines.push_back("System: " + binfo_.api + " (" + platform_.name() + "), GPU: " + binfo_.gpu);
     lines.push_back("Output: " + dinfo_.outputName + " " + dinfo_.monitorName + " " + displayModeString(dinfo_));
-    lines.push_back(fmt("VRR range assumed: %.0f-%.0f Hz   Window: %s", cfg_.vrrMinHz, cfg_.vrrMaxHz,
-                        windowModeName(platform_.windowMode())));
+    lines.push_back(fmt("VRR range assumed: %.0f-%.0f Hz   Window: %s", cfg_.vrrMinHz,
+                        lowHz_ > 0 ? lowHz_ : cfg_.vrrMaxHz, windowModeName(platform_.windowMode())));
+    if (lowHz_ > 0)
+        lines.push_back(fmt("LOW-REFRESH TEST: %.0f Hz display mode, frames cannot be repeated by the driver", lowHz_));
     lines.push_back("Timing source: " + (binfo_.timingAvailable ? binfo_.timingSource : std::string("none")));
     lines.push_back("");
     for (size_t i = 0; i < results_.size(); ++i) {
@@ -577,12 +597,12 @@ void App::writeReport() {
                             timingLabel(r.verdict.timing), answerLabel(r.answer)));
         lines.push_back("   " + timingSentence(steps[i], r) +
                         fmt(" [%d intervals, %.0f%% on time]", r.verdict.samples, r.verdict.onTimePct));
-        if (r.osdHz > 0) lines.push_back("   Monitor OSD: " + osdSentence(r.targetFps, r.osdHz, dinfo_.refreshHz));
+        if (r.osdHz > 0) lines.push_back("   Monitor OSD: " + osdSentence(r.targetFps, r.osdHz, dinfo_.refreshHz, cfg_.vrrMinHz));
         if (!r.csvPath.empty()) lines.push_back("   log: " + r.csvPath);
     }
     lines.push_back("");
     lines.push_back("CONCLUSION");
-    for (const auto& c : guidedConclusion(results_, cfg_.vrrMinHz, dinfo_.refreshHz)) lines.push_back("- " + c);
+    for (const auto& c : guidedConclusion(results_, cfg_.vrrMinHz, dinfo_.refreshHz, lowHz_ > 0)) lines.push_back("- " + c);
 
     for (const auto& l : lines) std::printf("%s\n", l.c_str());
     std::fflush(stdout);
@@ -598,7 +618,7 @@ void App::writeReport() {
 void App::buildGuidedOverlay(int64_t now) {
     refreshInfo();
     refreshLogState();
-    const auto& steps = guidedSteps();
+    const auto& steps = guidedSteps(lowHz_ > 0);
 
     struct Item {
         std::string text;
@@ -634,7 +654,18 @@ void App::buildGuidedOverlay(int64_t now) {
         for (const auto& n : binfo_.setup) add(n.text, n.warning ? kYellow : kGreen);
         if (binfo_.timingAvailable) add("Display timing: available - each test gets a timing verdict", kGreen);
         else add("Display timing: NOT available here - only your own observations will count", kYellow);
-        add(fmt("Assumed VRR range: %.0f-%.0f Hz", cfg_.vrrMinHz, cfg_.vrrMaxHz), kGray);
+        if (lowHz_ > 0) {
+            add(fmt("LOW-REFRESH TEST ON: display mode %.0f Hz, VRR range %.0f-%.0f Hz. The driver cannot repeat "
+                    "frames, so the monitor runs near its minimum refresh rate, like on Linux.",
+                    dinfo_.refreshHz, cfg_.vrrMinHz, lowHz_),
+                kYellow);
+            add("L  back to the normal test", kWhite);
+        } else {
+            add(fmt("Assumed VRR range: %.0f-%.0f Hz", cfg_.vrrMinHz, cfg_.vrrMaxHz), kGray);
+            if (platform_.canLimitRefresh())
+                add("L  low-refresh test: 60 Hz mode, so the monitor runs near 48 Hz like on Linux", kWhite);
+        }
+        if (!lowStatus_.empty()) add(lowStatus_, kRed);
         add("");
         add("ENTER start    TAB advanced mode    Q quit", kWhite);
     } else if (mode_ == Mode::Step) {
@@ -658,16 +689,18 @@ void App::buildGuidedOverlay(int64_t now) {
         if (step.changing) {
             add("Your monitor's Hz reading will jump around in this test; no need to type it.", kGray);
         } else {
-            add("Monitor Hz with VRR: " + osdExpected(live.targetFps, cfg_.vrrMinHz, cfg_.vrrMaxHz) +
+            add("Monitor Hz with VRR: " + osdExpected(live.targetFps, cfg_.vrrMinHz, lowHz_ > 0 ? lowHz_ : cfg_.vrrMaxHz) +
                     " (a whole multiple of the FPS)",
                 kGray);
             if (osdInput_.empty()) {
                 add("Type the Hz your monitor shows (optional): _", kWhite);
             } else {
-                const OsdReading o = interpretOsd(live.targetFps, std::atoi(osdInput_.c_str()), dinfo_.refreshHz);
-                const uint32_t c = o.fit == OsdFit::Multiple ? kGreen : o.fit == OsdFit::Ambiguous ? kYellow : kRed;
+                const OsdReading o = interpretOsd(live.targetFps, std::atoi(osdInput_.c_str()), dinfo_.refreshHz, cfg_.vrrMinHz);
+                const uint32_t c = o.fit == OsdFit::Multiple                                     ? kGreen
+                                   : o.fit == OsdFit::Ambiguous || o.fit == OsdFit::AtMinimum ? kYellow
+                                                                                              : kRed;
                 add("Monitor shows: " + osdInput_ + "_   " +
-                        osdSentence(live.targetFps, std::atoi(osdInput_.c_str()), dinfo_.refreshHz),
+                        osdSentence(live.targetFps, std::atoi(osdInput_.c_str()), dinfo_.refreshHz, cfg_.vrrMinHz),
                     c);
             }
         }
@@ -697,7 +730,7 @@ void App::buildGuidedOverlay(int64_t now) {
                 c);
         }
         add("");
-        for (const auto& p : guidedConclusion(results_, cfg_.vrrMinHz, dinfo_.refreshHz)) {
+        for (const auto& p : guidedConclusion(results_, cfg_.vrrMinHz, dinfo_.refreshHz, lowHz_ > 0)) {
             add(p);
             add("");
         }

@@ -116,6 +116,13 @@ panel refreshes at the frame rate **or a whole multiple of it**: many drivers sh
 refresh rate high, so 90 FPS can read 180 Hz and 45 FPS can read 90 or 180 Hz. That is VRR working, not a fault. A
 reading stuck at the fixed refresh rate (e.g. 200 Hz at 90 FPS) means VRR is off. The app explains each reading.
 
+**Low-refresh test (Windows).** Windows drivers often repeat frames (e.g. 45 FPS shown at 135-180 Hz), which keeps
+the panel far from its 48 Hz minimum, so a normal Windows run cannot reproduce flicker that happens near the minimum.
+Press **L** on the start screen to run the check in a 60 Hz exclusive-fullscreen display mode instead: with VRR the
+refresh rate can only stretch below the mode's rate, so the ceiling becomes 60 Hz, frames below 48 FPS cannot be
+repeated, and the monitor runs at its minimum like it does on Linux. If it flickers there too, the flicker is the
+monitor's behaviour at very low refresh rates; if not, the Linux flicker comes from the Linux side.
+
 The result is also saved as `vrrdiag-report-<date>.txt` next to the per-test CSV logs. **H** hides the text,
 **LEFT/RIGHT** change the pattern, **F** toggles fullscreen, **ESC** cancels, **TAB** opens the advanced test bench.
 

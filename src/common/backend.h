@@ -130,6 +130,14 @@ public:
     virtual WindowMode windowMode() const = 0;
     virtual void setWindowMode(WindowMode m) = 0;
     virtual DisplayInfo displayInfo() = 0;
+    // Low-refresh test: runs the output in a display mode of hz (exclusive fullscreen) so the VRR
+    // ceiling drops to hz and the driver cannot hide low frame rates by repeating frames.
+    // hz = 0 restores the normal mode. Returns false if unsupported or the switch failed.
+    virtual bool canLimitRefresh() const { return false; }
+    virtual bool setRefreshCeiling(double hz) {
+        (void)hz;
+        return false;
+    }
 };
 
 class Backend {

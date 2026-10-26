@@ -232,6 +232,20 @@ void WinPlatform::queryDisplay() {
     }
 }
 
+bool WinPlatform::setRefreshCeiling(double hz) {
+    if (!backend_) return false;
+    backend_->setExclusiveRefresh(hz);
+    // Re-enter exclusive fullscreen so the new display mode takes effect.
+    if (mode_ == WindowMode::Exclusive) setWindowMode(WindowMode::Borderless);
+    if (hz <= 0) return true;
+    setWindowMode(WindowMode::Exclusive);
+    if (mode_ != WindowMode::Exclusive) {
+        backend_->setExclusiveRefresh(0);
+        return false;
+    }
+    return true;
+}
+
 DisplayInfo WinPlatform::displayInfo() {
     if (displayDirty_) {
         queryDisplay();

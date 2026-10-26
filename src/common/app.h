@@ -89,7 +89,9 @@ private:
     int64_t stepStartNs_ = 0;
     int64_t answerNs_ = 0;
     Answer answer_ = Answer::None;
-    std::string osdInput_;  // digits typed for the monitor's OSD refresh reading
+    std::string osdInput_;
+    double lowHz_ = 0.0;      // low-refresh test: display-mode refresh rate in use, 0 = off
+    std::string lowStatus_;   // why the low-refresh test could not start  // digits typed for the monitor's OSD refresh reading
     std::vector<TimingSample> stepSamples_;
     std::vector<StepResult> results_;
     std::string reportPath_;
