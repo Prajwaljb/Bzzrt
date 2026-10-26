@@ -490,13 +490,11 @@ void App::handleGuidedKey(const KeyEvent& k) {
             }
             break;
         case Key::Fullscreen: {
+            // Cycles windowed -> borderless -> exclusive (Windows) -> windowed.
             const auto modes = platform_.supportedWindowModes();
-            const bool windowed = platform_.windowMode() == WindowMode::Windowed;
-            for (auto m : modes)
-                if ((m == WindowMode::Windowed) != windowed) {
-                    platform_.setWindowMode(m);
-                    break;
-                }
+            auto it = std::find(modes.begin(), modes.end(), platform_.windowMode());
+            const size_t idx = it == modes.end() ? 0 : (static_cast<size_t>(it - modes.begin()) + 1) % modes.size();
+            platform_.setWindowMode(modes[idx]);
             break;
         }
         case Key::Left: pattern_ = (pattern_ + kPatCount - 1) % kPatCount; break;
@@ -615,8 +613,11 @@ void App::buildGuidedOverlay(int64_t now) {
         if (!dinfo_.monitorName.empty()) mon += " " + dinfo_.monitorName;
         if (dinfo_.width > 0) mon += fmt(", %dx%d @ %.0f Hz", dinfo_.width, dinfo_.height, dinfo_.refreshHz);
         add(mon, kCyan);
-        if (windowed) add("Fullscreen: NO - press F. VRR normally only works in fullscreen.", kRed);
-        else add("Fullscreen: yes", kGreen);
+        if (windowed)
+            add("Window: NOT fullscreen - press F. VRR normally only works in fullscreen.", kRed);
+        else
+            add(std::string("Window: ") + windowModeName(platform_.windowMode()) + "   (F to change)", kGreen);
+        for (const auto& n : binfo_.setup) add(n.text, n.warning ? kYellow : kGreen);
         if (binfo_.timingAvailable) add("Display timing: available - each test gets a timing verdict", kGreen);
         else add("Display timing: NOT available here - only your own observations will count", kYellow);
         add(fmt("Assumed VRR range: %.0f-%.0f Hz", cfg_.vrrMinHz, cfg_.vrrMaxHz), kGray);
@@ -732,6 +733,7 @@ int App::run() {
         }
     }
     std::printf("API: %s | GPU: %s\n", binfo_.api.c_str(), binfo_.gpu.c_str());
+    for (const auto& n : binfo_.setup) std::printf("%s %s\n", n.warning ? "Setup WARNING:" : "Setup:", n.text.c_str());
     std::printf("Note: software cannot prove VRR/LFC is active - watch the monitor OSD.\n");
     std::fflush(stdout);
 

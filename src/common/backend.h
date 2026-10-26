@@ -88,6 +88,12 @@ struct PresentModeInfo {
     bool vsync = true; // false = tearing / unsynchronized
 };
 
+// A line for the guided check's start screen about whether the setup can do VRR.
+struct SetupNote {
+    std::string text;
+    bool warning = false;
+};
+
 struct BackendInfo {
     std::string api;
     std::string gpu;
@@ -98,6 +104,7 @@ struct BackendInfo {
     bool timingAvailable = false;
     int width = 0, height = 0;  // swap-chain / framebuffer size
     std::vector<std::string> notes;
+    std::vector<SetupNote> setup;
 };
 
 struct DisplayInfo {

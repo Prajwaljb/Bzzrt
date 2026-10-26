@@ -46,6 +46,15 @@ static const char* colorSpaceName(DXGI_COLOR_SPACE_TYPE cs) {
     }
 }
 
+bool DxgiBackendBase::adapterDrivesMonitor(IDXGIAdapter1* a, HMONITOR mon) {
+    for (UINT o = 0;; ++o) {
+        ComPtr<IDXGIOutput> out;
+        if (a->EnumOutputs(o, &out) == DXGI_ERROR_NOT_FOUND) return false;
+        DXGI_OUTPUT_DESC od{};
+        if (SUCCEEDED(out->GetDesc(&od)) && od.Monitor == mon) return true;
+    }
+}
+
 DxgiBackendBase::~DxgiBackendBase() {
     if (swap_) swap_->SetFullscreenState(FALSE, nullptr);
     if (waitable_) CloseHandle(waitable_);
@@ -66,6 +75,10 @@ bool DxgiBackendBase::initDxgi(HWND hwnd, const Config& cfg, std::string& err) {
             tearingSupported_ = allow != FALSE;
     }
 
+    // Default: the GPU the window's monitor is connected to. Rendering on another GPU (hybrid laptops)
+    // makes Windows copy every frame across adapters, which usually rules out independent flip and VRR.
+    ComPtr<IDXGIAdapter1> first, owner;
+    std::string firstName, ownerName;
     for (UINT i = 0;; ++i) {
         ComPtr<IDXGIAdapter1> a;
         if (factory_->EnumAdapters1(i, &a) == DXGI_ERROR_NOT_FOUND) break;
@@ -74,19 +87,27 @@ bool DxgiBackendBase::initDxgi(HWND hwnd, const Config& cfg, std::string& err) {
         if (d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) continue;
         const std::string name = narrow(d.Description);
         adapterList_.push_back("[" + std::to_string(i) + "] " + name);
-        if ((cfg.gpuIndex < 0 && !adapter_) || static_cast<int>(i) == cfg.gpuIndex) {
-            adapter_ = a;
-            gpuName_ = name;
-        }
+        if (!first) first = a, firstName = name;
+        if (!owner && adapterDrivesMonitor(a.Get(), MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST)))
+            owner = a, ownerName = name;
+        if (static_cast<int>(i) == cfg.gpuIndex) adapter_ = a, gpuName_ = name;
     }
-    if (!adapter_) return err = "no hardware DXGI adapter (check --gpu)", false;
+    if (!adapter_ && cfg.gpuIndex >= 0) return err = "no hardware DXGI adapter with index --gpu " +
+                                                     std::to_string(cfg.gpuIndex), false;
+    if (!adapter_) {
+        adapter_ = owner ? owner : first;
+        gpuName_ = owner ? ownerName : firstName;
+    }
+    if (!adapter_) return err = "no hardware DXGI adapter", false;
     std::printf("DXGI adapters:\n");
     for (const auto& a : adapterList_) std::printf("  %s\n", a.c_str());
     std::printf("DXGI_FEATURE_PRESENT_ALLOW_TEARING: %s\n", tearingSupported_ ? "TRUE" : "FALSE");
 
-    modes_.push_back({"vsync", "SyncInterval=1 (vsync; VRR works in independent flip)", true});
+    // Microsoft documents SyncInterval=0 + ALLOW_TEARING as required for VRR outside exclusive fullscreen,
+    // so it is the default. The app paces frames itself, and inside the VRR range nothing tears.
     if (tearingSupported_)
-        modes_.push_back({"tearing", "SyncInterval=0 + DXGI_PRESENT_ALLOW_TEARING", false});
+        modes_.push_back({"tearing", "SyncInterval=0 + DXGI_PRESENT_ALLOW_TEARING (Windows VRR path)", false});
+    modes_.push_back({"vsync", "SyncInterval=1 (vsync)", true});
     modes_.push_back({"nosync", "SyncInterval=0 without ALLOW_TEARING (no tearing when composed)", false});
     return true;
 }
@@ -281,6 +302,40 @@ bool DxgiBackendBase::compileShader(const char* entry, const char* target, ComPt
     return true;
 }
 
+void DxgiBackendBase::updateSetupNotes() {
+    setup_.clear();
+    const HMONITOR mon = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
+    std::string ownerName;
+    for (UINT i = 0;; ++i) {
+        ComPtr<IDXGIAdapter1> a;
+        if (factory_->EnumAdapters1(i, &a) == DXGI_ERROR_NOT_FOUND) break;
+        if (adapterDrivesMonitor(a.Get(), mon)) {
+            DXGI_ADAPTER_DESC1 d{};
+            a->GetDesc1(&d);
+            ownerName = narrow(d.Description);
+            break;
+        }
+    }
+    if (ownerName.empty())
+        setup_.push_back({"Could not tell which GPU drives this monitor. USB docks with DisplayLink cannot do VRR.",
+                          true});
+    else if (adapterDrivesMonitor(adapter_.Get(), mon))
+        setup_.push_back({"Drawing on " + gpuName_ + ", the GPU this monitor is connected to", false});
+    else
+        setup_.push_back({"Drawing on " + gpuName_ + " but this monitor is connected to " + ownerName +
+                              ". Frames are copied between GPUs, which usually blocks VRR. Restart the app on "
+                              "this screen.",
+                          true});
+    if (!tearingSupported_)
+        setup_.push_back({"Windows reports no tearing support, so VRR in borderless fullscreen is unlikely. Press "
+                          "F until the window mode says Exclusive.",
+                          true});
+    else if (modes_[modeIdx_].id == "tearing" || exclusiveActive_)
+        setup_.push_back({"Presenting the way Windows needs for VRR (flip model, ALLOW_TEARING)", false});
+    else
+        setup_.push_back({"Present mode is vsync: Windows may not use VRR in borderless fullscreen", true});
+}
+
 void DxgiBackendBase::fillInfo(BackendInfo& b, const char* api) {
     b.api = std::string(api) + " / DXGI flip model (FLIP_DISCARD, " + std::to_string(kBufferCount) + " buffers)";
     b.gpu = gpuName_;
@@ -299,6 +354,7 @@ void DxgiBackendBase::fillInfo(BackendInfo& b, const char* api) {
     if (now - outputDescNs_ > 2000000000LL) {
         outputDescNs_ = now;
         outputDesc_.clear();
+        updateSetupNotes();
         ComPtr<IDXGIOutput> out;
         ComPtr<IDXGIOutput6> out6;
         if (SUCCEEDED(swap_->GetContainingOutput(&out)) && SUCCEEDED(out.As(&out6))) {
@@ -312,6 +368,7 @@ void DxgiBackendBase::fillInfo(BackendInfo& b, const char* api) {
         }
     }
     if (!outputDesc_.empty()) b.notes.push_back(outputDesc_);
+    b.setup = setup_;
     b.notes.push_back("Use PresentMon: VRR needs 'Hardware: Independent Flip' (or Composed: Independent Flip).");
     if (adapterList_.size() > 1) {
         std::string g = "Adapters:";

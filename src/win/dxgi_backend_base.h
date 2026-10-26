@@ -71,6 +71,9 @@ protected:
 
 private:
     void applyColorSpace();
+    void updateSetupNotes();
+    static bool adapterDrivesMonitor(IDXGIAdapter1* a, HMONITOR mon);
+    std::vector<SetupNote> setup_;
     std::vector<PresentModeInfo> modes_;
     int modeIdx_ = 0;
     struct PresentMapEntry {

@@ -202,8 +202,15 @@ Definitions: *1 % low* = 1000 / (99th-percentile frame time); *0.1 % low* = 1000
   [PresentMon](https://github.com/GameTechDev/PresentMon) (`PresentMon --process_name vrrdiag.exe`): the PresentMode
   column must read `Hardware: Independent Flip` or `Hardware Composed: Independent Flip`. `Composed: Flip` means DWM is
   compositing and VRR is **not** in effect.
-* Present modes: `vsync` = `Present(1, 0)`, which still runs variable refresh below the maximum rate in independent flip;
-  `tearing` = `Present(0, DXGI_PRESENT_ALLOW_TEARING)`; `nosync` = `Present(0, 0)`.
+* Present modes: `tearing` (default when supported) = `Present(0, DXGI_PRESENT_ALLOW_TEARING)`, which Microsoft
+  documents as required for VRR outside exclusive fullscreen; the app paces frames itself, so nothing tears inside
+  the VRR range. `vsync` = `Present(1, 0)`; `nosync` = `Present(0, 0)`.
+* The app opens on the screen under the mouse (double-click it on the external monitor) and renders on the GPU that
+  monitor is connected to. On hybrid laptops, rendering on the other GPU forces a cross-adapter copy that usually
+  prevents VRR. `--gpu N` overrides this, and the start screen warns when the two GPUs differ.
+* If VRR still stays off, press **F** on the start screen until it says *Exclusive fullscreen*. Things the app cannot
+  override: VRR switched off in the GPU driver or by IT policy, DisplayLink USB docks (no VRR at all), and always-on-top
+  overlays (for example screen watermarks or notification tools) that force DWM composition.
 * The overlay shows DXGI's `BitsPerColor` and the link bit depth reported by `QueryDisplayConfig`.
   Windows chooses 8 bpc versus 10 bpc (and FRC/dithering) for the link independently of the swap-chain format.
 

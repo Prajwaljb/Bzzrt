@@ -148,7 +148,12 @@ std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results
         out.push_back("VRR WAS NOT ACTIVE (steps " + stepList(noVrr) + " were locked to the fixed refresh rate), so "
                       "this run did not test VRR. Turn on Adaptive-Sync / FreeSync in the monitor menu and in the "
                       "system (KDE: System Settings > Display > Adaptive sync = Always; Windows: Settings > Display > "
-                      "Graphics > Variable refresh rate), keep this app fullscreen, then run the check again.");
+                      "Graphics > Variable refresh rate), keep this app fullscreen, then run the check again."
+#ifdef _WIN32
+                      " If it stays off, press F on the start screen until the window mode says Exclusive "
+                      "fullscreen and run it once more."
+#endif
+                      );
     }
 
     // 2. Where did flicker appear, and was the computer's timing clean there?

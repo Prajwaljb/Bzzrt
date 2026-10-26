@@ -1,5 +1,7 @@
 #include "win_platform.h"
 
+#include <algorithm>
+
 #include <cstdio>
 
 #include "dxgi_backend_base.h"
@@ -66,8 +68,19 @@ bool WinPlatform::create(const Config& cfg, std::string& err) {
 
     RECT r{0, 0, cfg.windowW, cfg.windowH};
     AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
-    hwnd_ = CreateWindowExW(0, wc.lpszClassName, L"VRR/LFC diagnostic", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
-                            CW_USEDEFAULT, r.right - r.left, r.bottom - r.top, nullptr, nullptr, inst, this);
+    const int w = r.right - r.left, h = r.bottom - r.top;
+    // Open on the screen under the mouse, i.e. where the app was double-clicked, so a laptop with an
+    // external monitor tests the monitor the user started it on rather than the primary screen.
+    int x = CW_USEDEFAULT, y = CW_USEDEFAULT;
+    POINT cursor{};
+    MONITORINFO mi{};
+    mi.cbSize = sizeof mi;
+    if (GetCursorPos(&cursor) && GetMonitorInfoW(MonitorFromPoint(cursor, MONITOR_DEFAULTTOPRIMARY), &mi)) {
+        x = mi.rcWork.left + std::max(0, static_cast<int>(mi.rcWork.right - mi.rcWork.left) - w) / 2;
+        y = mi.rcWork.top + std::max(0, static_cast<int>(mi.rcWork.bottom - mi.rcWork.top) - h) / 2;
+    }
+    hwnd_ = CreateWindowExW(0, wc.lpszClassName, L"VRR/LFC diagnostic", WS_OVERLAPPEDWINDOW, x, y, w, h, nullptr,
+                            nullptr, inst, this);
     if (!hwnd_) return err = "CreateWindowExW failed", false;
     ShowWindow(hwnd_, SW_SHOW);
     UpdateWindow(hwnd_);

@@ -1,0 +1,27 @@
+Synchora - VRR flicker check
+============================
+
+Does VRR flicker come from your monitor or from your computer? This tool finds out.
+
+1. Turn on Adaptive-Sync / FreeSync in the monitor's own menu.
+   Windows: Settings > System > Display > Graphics > Variable refresh rate = On.
+   KDE: System Settings > Display Configuration > Adaptive sync = Always (or Automatic).
+2. Start the app ON THE MONITOR YOU WANT TO TEST (Windows: double-click vrrdiag.exe
+   there; Linux: run ./vrrdiag-launch).
+3. Read the start screen. Yellow lines are setup problems worth fixing first.
+4. Press ENTER. Eight 10-second tests follow on a dark gray screen.
+   For each one press  Y = I see flicker,  N = no flicker,  S = not sure.
+5. The result screen tells you whether the flicker points to the monitor or to the
+   computer's graphics driver. It is also saved as vrrdiag-report-<date>.txt.
+
+Keys: F = windowed / borderless / exclusive fullscreen, H = hide text,
+      LEFT/RIGHT = change pattern, ESC = cancel, TAB = advanced test bench, Q = quit.
+
+If the result says "VRR WAS NOT ACTIVE": check step 1, keep the app fullscreen, and on
+Windows press F until it says "Exclusive fullscreen", then run the check again.
+
+Run the check on both Windows and Linux and compare. Flicker in the same tests on both
+points to the monitor; flicker on only one of them points to that system's driver.
+
+Software cannot see what the panel itself does: the monitor's own refresh-rate readout
+(OSD) is the final word. Full documentation: README.md and VRR_LFC_GUIDE.md.
