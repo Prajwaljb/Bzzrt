@@ -1,0 +1,5 @@
+#!/bin/sh
+# Desktop launcher: CSV logs go to ~/vrrdiag-logs instead of whatever directory the launcher started in.
+LOG_DIR="${VRRDIAG_LOG_DIR:-$HOME/vrrdiag-logs}"
+mkdir -p "$LOG_DIR"
+exec "@VRRDIAG_BIN@" --log-dir "$LOG_DIR" "$@"

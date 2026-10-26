@@ -1,0 +1,225 @@
+#include "win_platform.h"
+
+#include <cstdio>
+
+#include "dxgi_backend_base.h"
+
+namespace vrr {
+
+std::string narrow(const wchar_t* w) {
+    if (!w || !*w) return {};
+    const int n = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
+    std::string s(static_cast<size_t>(n > 0 ? n - 1 : 0), '\0');
+    if (n > 1) WideCharToMultiByte(CP_UTF8, 0, w, -1, &s[0], n, nullptr, nullptr);
+    return s;
+}
+
+static Key keyFromVk(WPARAM vk) {
+    switch (vk) {
+        case VK_ESCAPE: return Key::Escape;
+        case 'Q': return Key::Q;
+        case VK_SPACE: return Key::Space;
+        case VK_UP: return Key::Up;
+        case VK_DOWN: return Key::Down;
+        case VK_LEFT: return Key::Left;
+        case VK_RIGHT: return Key::Right;
+        case VK_PRIOR: return Key::PageUp;
+        case VK_NEXT: return Key::PageDown;
+        case VK_OEM_PLUS:
+        case VK_ADD: return Key::Plus;
+        case VK_OEM_MINUS:
+        case VK_SUBTRACT: return Key::Minus;
+        case VK_F11:
+        case 'F': return Key::Fullscreen;
+        case 'V': return Key::V;
+        case 'P': return Key::P;
+        case 'G': return Key::G;
+        case 'C': return Key::C;
+        case 'H': return Key::H;
+        case 'L': return Key::L;
+        case 'R': return Key::R;
+        case 'K': return Key::K;
+        case VK_OEM_4: return Key::LBracket;
+        case VK_OEM_6: return Key::RBracket;
+        case 'Y': return Key::Y;
+        case 'N': return Key::N;
+        case 'S': return Key::S;
+        case VK_RETURN: return Key::Enter;
+        case VK_TAB: return Key::Tab;
+        default: return Key::None;
+    }
+}
+
+WinPlatform::~WinPlatform() {
+    if (hwnd_) DestroyWindow(hwnd_);
+}
+
+bool WinPlatform::create(const Config& cfg, std::string& err) {
+    HINSTANCE inst = GetModuleHandleW(nullptr);
+    WNDCLASSEXW wc{};
+    wc.cbSize = sizeof wc;
+    wc.lpfnWndProc = wndProc;
+    wc.hInstance = inst;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpszClassName = L"VrrDiagWindow";
+    if (!RegisterClassExW(&wc)) return err = "RegisterClassExW failed", false;
+
+    RECT r{0, 0, cfg.windowW, cfg.windowH};
+    AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
+    hwnd_ = CreateWindowExW(0, wc.lpszClassName, L"VRR/LFC diagnostic", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
+                            CW_USEDEFAULT, r.right - r.left, r.bottom - r.top, nullptr, nullptr, inst, this);
+    if (!hwnd_) return err = "CreateWindowExW failed", false;
+    ShowWindow(hwnd_, SW_SHOW);
+    UpdateWindow(hwnd_);
+    GetWindowRect(hwnd_, &windowedRect_);
+    mode_ = WindowMode::Windowed;
+    return true;
+}
+
+LRESULT CALLBACK WinPlatform::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_NCCREATE) {
+        auto* cs = reinterpret_cast<CREATESTRUCTW*>(lp);
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
+        // Messages arrive before CreateWindowExW returns; handle() forwards to DefWindowProcW(hwnd_).
+        static_cast<WinPlatform*>(cs->lpCreateParams)->hwnd_ = hwnd;
+    }
+    auto* self = reinterpret_cast<WinPlatform*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (self) return self->handle(msg, wp, lp);
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+LRESULT WinPlatform::handle(UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+        case WM_CLOSE: quit_ = true; return 0;
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN: {
+            if (msg == WM_SYSKEYDOWN && wp == VK_F4) break;  // Alt+F4
+            const Key k = keyFromVk(wp);
+            const bool repeat = (lp & (1 << 30)) != 0;
+            if (k != Key::None && (!repeat || k == Key::Plus || k == Key::Minus))
+                keys_.push_back({k, (GetKeyState(VK_SHIFT) & 0x8000) != 0});
+            return 0;
+        }
+        case WM_SETCURSOR:
+            if (LOWORD(lp) == HTCLIENT && mode_ != WindowMode::Windowed) {
+                SetCursor(nullptr);
+                return TRUE;
+            }
+            break;
+        case WM_ERASEBKGND: return 1;
+        case WM_SIZE:
+        case WM_MOVE:
+        case WM_DISPLAYCHANGE:
+        case WM_DPICHANGED: displayDirty_ = true; break;
+        default: break;
+    }
+    return DefWindowProcW(hwnd_, msg, wp, lp);
+}
+
+void WinPlatform::pollEvents(std::vector<KeyEvent>& keys) {
+    MSG m;
+    while (PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) {
+        if (m.message == WM_QUIT) quit_ = true;
+        TranslateMessage(&m);
+        DispatchMessageW(&m);
+    }
+    keys.insert(keys.end(), keys_.begin(), keys_.end());
+    keys_.clear();
+}
+
+void WinPlatform::setWindowMode(WindowMode m) {
+    if (m == mode_) return;
+    if (mode_ == WindowMode::Exclusive && backend_) backend_->setExclusiveFullscreen(false);
+    if (mode_ == WindowMode::Windowed) GetWindowRect(hwnd_, &windowedRect_);
+
+    if (m == WindowMode::Windowed) {
+        SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+        SetWindowPos(hwnd_, HWND_NOTOPMOST, windowedRect_.left, windowedRect_.top,
+                     windowedRect_.right - windowedRect_.left, windowedRect_.bottom - windowedRect_.top,
+                     SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+    } else {
+        // Borderless: a popup exactly covering the monitor, which allows DWM independent flip.
+        MONITORINFO mi{};
+        mi.cbSize = sizeof mi;
+        GetMonitorInfoW(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST), &mi);
+        SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+        SetWindowPos(hwnd_, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left,
+                     mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
+    }
+    mode_ = m;
+    if (m == WindowMode::Exclusive && (!backend_ || !backend_->setExclusiveFullscreen(true))) {
+        std::printf("Exclusive fullscreen failed; using borderless fullscreen.\n");
+        mode_ = WindowMode::Borderless;
+    }
+    displayDirty_ = true;
+}
+
+void WinPlatform::queryDisplay() {
+    cached_ = DisplayInfo{};
+    MONITORINFOEXW mi{};
+    mi.cbSize = sizeof mi;
+    if (!GetMonitorInfoW(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST), &mi)) return;
+    cached_.outputName = narrow(mi.szDevice);
+    cached_.width = mi.rcMonitor.right - mi.rcMonitor.left;
+    cached_.height = mi.rcMonitor.bottom - mi.rcMonitor.top;
+    DEVMODEW dm{};
+    dm.dmSize = sizeof dm;
+    if (EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm)) {
+        cached_.refreshHz = dm.dmDisplayFrequency;
+        cached_.width = static_cast<int>(dm.dmPelsWidth);
+        cached_.height = static_cast<int>(dm.dmPelsHeight);
+    }
+
+    // QueryDisplayConfig gives the exact rational refresh rate, the monitor name and the link bit depth.
+    UINT32 numPaths = 0, numModes = 0;
+    if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &numPaths, &numModes) != ERROR_SUCCESS) return;
+    std::vector<DISPLAYCONFIG_PATH_INFO> paths(numPaths);
+    std::vector<DISPLAYCONFIG_MODE_INFO> modes(numModes);
+    if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &numPaths, paths.data(), &numModes, modes.data(), nullptr) !=
+        ERROR_SUCCESS)
+        return;
+    for (UINT32 i = 0; i < numPaths; ++i) {
+        const DISPLAYCONFIG_PATH_INFO& p = paths[i];
+        DISPLAYCONFIG_SOURCE_DEVICE_NAME src{};
+        src.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+        src.header.size = sizeof src;
+        src.header.adapterId = p.sourceInfo.adapterId;
+        src.header.id = p.sourceInfo.id;
+        if (DisplayConfigGetDeviceInfo(&src.header) != ERROR_SUCCESS) continue;
+        if (wcscmp(src.viewGdiDeviceName, mi.szDevice) != 0) continue;
+
+        const DISPLAYCONFIG_RATIONAL& rr = p.targetInfo.refreshRate;
+        if (rr.Denominator) cached_.refreshHz = static_cast<double>(rr.Numerator) / rr.Denominator;
+
+        DISPLAYCONFIG_TARGET_DEVICE_NAME tn{};
+        tn.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+        tn.header.size = sizeof tn;
+        tn.header.adapterId = p.targetInfo.adapterId;
+        tn.header.id = p.targetInfo.id;
+        if (DisplayConfigGetDeviceInfo(&tn.header) == ERROR_SUCCESS)
+            cached_.monitorName = narrow(tn.monitorFriendlyDeviceName);
+
+        DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO ci{};
+        ci.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+        ci.header.size = sizeof ci;
+        ci.header.adapterId = p.targetInfo.adapterId;
+        ci.header.id = p.targetInfo.id;
+        if (DisplayConfigGetDeviceInfo(&ci.header) == ERROR_SUCCESS) {
+            char buf[160];
+            std::snprintf(buf, sizeof buf, "Windows link color depth: %u bpc; HDR/advanced color: %s",
+                          static_cast<unsigned>(ci.bitsPerColorChannel), (ci.value & 0x2) ? "ON" : "off");
+            cached_.extra = buf;
+        }
+        break;
+    }
+}
+
+DisplayInfo WinPlatform::displayInfo() {
+    if (displayDirty_) {
+        queryDisplay();
+        displayDirty_ = false;
+    }
+    return cached_;
+}
+
+}  // namespace vrr
