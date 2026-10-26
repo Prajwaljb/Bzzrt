@@ -89,6 +89,14 @@ App::App(const Config& cfg, Platform& platform, Backend& backend)
     mode_ = cfg.advanced ? Mode::Advanced : Mode::Intro;
     // Brightness flicker is easiest to see on a dark uniform gray.
     if (!cfg.advanced && !cfg.patternGiven) pattern_ = kPatDarkGray;
+    doubling_ = cfg.doubleFrames && backend.canRepeatFrames();
+}
+
+int App::repeatMultiple(double intervalSec) const {
+    if (!doubling_) return 1;
+    // Enough repeats to keep every refresh about 10% above the panel's minimum, never faster than its maximum.
+    const int m = static_cast<int>(std::ceil(intervalSec * cfg_.vrrMinHz * 1.1));
+    return std::max(1, std::min(m, static_cast<int>(std::floor(intervalSec * cfg_.vrrMaxHz))));
 }
 
 void App::flash(const std::string& msg) {
@@ -541,6 +549,7 @@ void App::startStep(int index) {
     answer_ = Answer::None;
     osdInput_.clear();
     stepSamples_.clear();
+    stepRepeats_ = stepRepeatsOk_ = 0;
     testIdx_ = findTest(step.testId);
     TestParams p = params_;
     if (step.jitterMax > 0) {
@@ -566,6 +575,9 @@ void App::finishStep() {
     r.latePct = stats_.frames() ? 100.0 * static_cast<double>(stats_.lateFrames()) / stats_.frames() : 0.0;
     if (r.latePct > kAppLateLimitPct) r.verdict.timing = Timing::AppLate;
     r.csvPath = lastLogPath_;
+    r.multiple = r.targetFps > 0 ? repeatMultiple(1.0 / r.targetFps) : 0;
+    r.repeats = stepRepeats_;
+    r.repeatOkPct = stepRepeats_ ? 100.0 * stepRepeatsOk_ / stepRepeats_ : 0.0;
     stopTest("completed");
     results_.push_back(r);
     if (stepIdx_ + 1 < static_cast<int>(guidedSteps(lowHz_ > 0).size())) {
@@ -594,6 +606,10 @@ void App::writeReport() {
                         lowHz_ > 0 ? lowHz_ : cfg_.vrrMaxHz, windowModeName(platform_.windowMode())));
     if (lowHz_ > 0)
         lines.push_back(fmt("LOW-REFRESH TEST: %.0f Hz display mode, frames cannot be repeated by the driver", lowHz_));
+    if (doubling_)
+        lines.push_back(fmt("FRAME DOUBLING EXPERIMENT: frames slower than %.0f FPS were shown several times by this "
+                            "app at even intervals, as a driver with LFC would do it",
+                            cfg_.vrrMinHz * 1.1));
     lines.push_back("Timing source: " + (binfo_.timingAvailable ? binfo_.timingSource : std::string("none")));
     lines.push_back("");
     for (size_t i = 0; i < results_.size(); ++i) {
@@ -602,12 +618,19 @@ void App::writeReport() {
                             timingLabel(r.verdict.timing), answerLabel(r.answer)));
         lines.push_back("   " + timingSentence(steps[i], r) +
                         fmt(" [%d intervals, %.0f%% on time]", r.verdict.samples, r.verdict.onTimePct));
+        if (r.repeats > 0) {
+            const std::string how = r.multiple > 1 ? fmt("each frame shown %dx (%.0f Hz), ", r.multiple, r.targetFps * r.multiple)
+                                                   : std::string();
+            lines.push_back(fmt("   App frame doubling: %s%d repeat refreshes, %.0f%% at the requested time.", how.c_str(),
+                                r.repeats, r.repeatOkPct));
+        }
         if (r.osdHz > 0) lines.push_back("   Monitor OSD: " + osdSentence(r.targetFps, r.osdHz, dinfo_.refreshHz, cfg_.vrrMinHz));
         if (!r.csvPath.empty()) lines.push_back("   log: " + r.csvPath);
     }
     lines.push_back("");
     lines.push_back("CONCLUSION");
-    for (const auto& c : guidedConclusion(results_, cfg_.vrrMinHz, dinfo_.refreshHz, lowHz_ > 0)) lines.push_back("- " + c);
+    for (const auto& c : guidedConclusion(results_, cfg_.vrrMinHz, dinfo_.refreshHz, lowHz_ > 0, doubling_))
+        lines.push_back("- " + c);
 
     for (const auto& l : lines) std::printf("%s\n", l.c_str());
     std::fflush(stdout);
@@ -671,6 +694,13 @@ void App::buildGuidedOverlay(int64_t now) {
                 add("L  low-refresh test: 60 Hz mode, so the monitor runs near 48 Hz like on Linux", kWhite);
         }
         if (!lowStatus_.empty()) add(lowStatus_, kRed);
+        if (doubling_)
+            add(fmt("FRAME DOUBLING EXPERIMENT ON: this app shows frames slower than %.0f FPS twice at even intervals, "
+                    "as a driver with LFC would. If the low steps stop flickering, missing frame doubling is the cause.",
+                    cfg_.vrrMinHz * 1.1),
+                kYellow);
+        else if (cfg_.doubleFrames)
+            add("--double-frames is only available with --api kms; this run shows frames normally.", kRed);
         add("");
         add("ENTER start    TAB advanced mode    Q quit", kWhite);
     } else if (mode_ == Mode::Step) {
@@ -698,8 +728,17 @@ void App::buildGuidedOverlay(int64_t now) {
             add(std::string("Timing: ") + timingLabel(live.verdict.timing) + " - " + timingSentence(step, live), c);
         }
         if (windowed) add("Not fullscreen: VRR is probably off. Press F.", kRed);
+        const int multiple = live.targetFps > 0 ? repeatMultiple(1.0 / live.targetFps) : 1;
         if (step.changing) {
             add("Your monitor's Hz reading will jump around in this test; no need to type it.", kGray);
+        } else if (multiple > 1) {
+            add(fmt("Frame doubling: this app shows each frame %dx, so the monitor should read %.0f Hz.", multiple,
+                    live.targetFps * multiple),
+                kGray);
+            if (osdInput_.empty()) add("Type the Hz your monitor shows (optional): _", kWhite);
+            else add("Monitor shows: " + osdInput_ + "_   " +
+                         osdSentence(live.targetFps, std::atoi(osdInput_.c_str()), dinfo_.refreshHz, cfg_.vrrMinHz),
+                     kWhite);
         } else {
             add("Monitor Hz with VRR: " + osdExpected(live.targetFps, cfg_.vrrMinHz, lowHz_ > 0 ? lowHz_ : cfg_.vrrMaxHz) +
                     " (a whole multiple of the FPS)",
@@ -743,7 +782,7 @@ void App::buildGuidedOverlay(int64_t now) {
                 c);
         }
         add("");
-        for (const auto& p : guidedConclusion(results_, cfg_.vrrMinHz, dinfo_.refreshHz, lowHz_ > 0)) {
+        for (const auto& p : guidedConclusion(results_, cfg_.vrrMinHz, dinfo_.refreshHz, lowHz_ > 0, doubling_)) {
             add(p);
             add("");
         }
@@ -850,6 +889,17 @@ int App::run() {
         curTargetMs_ = interval * 1e3;
         const int64_t target = schedTarget + static_cast<int64_t>(std::llround(interval * 1e9));
 
+        // Frame doubling experiment: until this frame is due, the previous one is shown again at even intervals.
+        const int multiple = haveLastFp_ ? repeatMultiple(interval) : 1;
+        for (int k = 1; k < multiple; ++k) {
+            const int64_t at = schedTarget + static_cast<int64_t>(std::llround(interval * 1e9 * k / multiple));
+            if (backend_.renderFrame(lastFp_) != RenderResult::Rendered) break;
+            if (nowNs() > at + 1000000) break;  // too late: skipped rather than delaying the next frame
+            preciseSleepUntil(at);
+            repeatExpectMs_ = interval * 1e3 / multiple;
+            backend_.present(lastFp_.frameIndex | kRepeatFrameBit);
+        }
+
         int64_t now = nowNs();
         // The overlay is redrawn at most every 100 ms, and only when the redraw is expected to finish before
         // this frame is due, so text updates never delay a frame (forced after 1 s at the latest).
@@ -909,6 +959,8 @@ int App::run() {
         const PresentOutcome po = backend_.present(frame_);
         const int64_t tRet = nowNs();
         lastStatus_ = po.status;
+        lastFp_ = fp;
+        haveLastFp_ = po.ok;
         targetRing_[frame_ % kTargetRing] = interval * 1e3;
         if (po.fatal) {
             std::fprintf(stderr, "Fatal present error: %s\n", po.status);
@@ -945,6 +997,16 @@ int App::run() {
         timing.clear();
         backend_.pollTiming(timing);
         for (const auto& t : timing) {
+            const int64_t sinceFlipNs = t.displayNs - lastAnyFlipNs_;
+            lastAnyFlipNs_ = t.displayNs;
+            if (t.frameIndex & kRepeatFrameBit) {
+                // Repeats are not frames: they only count toward whether the doubling reached the screen on time.
+                if (mode_ == Mode::Step && t.displayNs >= stepStartNs_ + 1000000000LL) {
+                    ++stepRepeats_;
+                    if (std::fabs(static_cast<double>(sinceFlipNs) / 1e6 - repeatExpectMs_) <= 1.5) ++stepRepeatsOk_;
+                }
+                continue;
+            }
             if (running_ && t.frameIndex > testStartFrame_) {
                 log_.setDisplayTime(t.frameIndex, t.displayNs);
                 if (lastDispFrame_ != ~0ull && t.frameIndex == lastDispFrame_ + 1) {

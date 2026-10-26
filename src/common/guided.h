@@ -50,6 +50,10 @@ struct StepResult {
     int osdHz = 0;           // refresh rate the user read off the monitor's OSD, 0 = not entered
     double latePct = 0.0;    // frames the app presented more than 0.2 ms after their scheduled time
     std::string csvPath;
+    // Frame doubling experiment: repeat refreshes the app added, and how many landed at the requested time.
+    int multiple = 1;        // times each frame was shown (steady steps)
+    int repeats = 0;
+    double repeatOkPct = 0.0;
 };
 
 // What the monitor's own refresh readout (OSD) means at a steady frame rate. With VRR the panel
@@ -69,8 +73,8 @@ const char* timingLabel(Timing t);
 const char* answerLabel(Answer a);
 // Short explanation of a verdict, e.g. "frames alternated 26 / 18 ms instead of an even 22.2 ms".
 std::string timingSentence(const GuidedStep& step, const StepResult& r);
-// Paragraphs of the final conclusion.
+// Paragraphs of the final conclusion. doubling: the app showed slow frames several times itself (--double-frames).
 std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results, double vrrMinHz, double refreshHz,
-                                          bool lowRefresh = false);
+                                          bool lowRefresh = false, bool doubling = false);
 
 }  // namespace vrr

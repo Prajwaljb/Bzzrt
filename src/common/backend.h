@@ -80,6 +80,9 @@ struct PresentOutcome {
     bool fatal = false;
 };
 
+// Set in the frame index passed to present() for a repeat of the previous frame (app-side frame doubling).
+constexpr uint64_t kRepeatFrameBit = 1ull << 63;
+
 // A presentation timestamp reported by the driver/OS for a given frame,
 // expressed in the nowNs() clock domain.
 struct DisplayTimingSample {
@@ -156,6 +159,9 @@ public:
     virtual bool supports10bit() const = 0;
     virtual bool is10bit() const = 0;
     virtual void set10bit(bool on) = 0;
+    // Frame doubling experiment: the previous frame can be shown again by calling renderFrame() with its
+    // FrameParams and present(index | kRepeatFrameBit); its timestamp is reported with the bit set.
+    virtual bool canRepeatFrames() const { return false; }
 };
 
 }  // namespace vrr

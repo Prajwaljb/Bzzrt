@@ -42,6 +42,8 @@ public:
     bool supports10bit() const override { return plane10_; }
     bool is10bit() const override { return want10_; }
     void set10bit(bool on) override { want10_ = on && plane10_; }
+    // Each repeat is a real page flip to another buffer with the same content.
+    bool canRepeatFrames() const override { return true; }
 
     void onFlip(uint64_t frame, int64_t ns);
 

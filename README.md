@@ -279,6 +279,11 @@ cd ~/Code/VRR && ./build/vrrdiag --api kms --test switch47-50 --start
   limits, `vrr_capable` and `max bpc`.
 * Drawing is done by the CPU. At 200 FPS, hide the overlay (`H`) to avoid late frames.
 * Flip timestamps show when *our* flips were latched. They do not show any extra (LFC) scanouts the hardware inserts.
+* `--double-frames` is an experiment for drivers without frame doubling (LFC). The app itself shows every frame slower
+  than ~53 FPS two or more times at even intervals, e.g. 45 FPS as 90 even refreshes, the way a driver with LFC would.
+  Each repeat is a real page flip, and the report says how many landed on time. If the steps below the VRR minimum
+  stop flickering, the missing frame doubling is the cause, not the monitor:
+  `vrrdiag-launch --api kms --double-frames --check`
 
 ---
 

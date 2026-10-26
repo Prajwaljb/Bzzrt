@@ -35,6 +35,7 @@ struct Config {
     std::string kmsDevice;     // /dev/dri/cardN
     std::string kmsConnector;  // e.g. DP-2
     std::string kmsMode;       // WxH@Hz
+    bool doubleFrames = false; // experiment: the app shows frames below the VRR minimum several times (KMS only)
     bool debug = false;
     bool listTests = false;
     bool help = false;

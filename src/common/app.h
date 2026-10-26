@@ -104,6 +104,15 @@ private:
     int64_t overlayCostNs_ = 0;    // extra time an overlay change adds to a frame (build + extra render), decays slowly
     int64_t renderNormalNs_ = 0;   // average renderFrame time without an overlay change
 
+    // Frame doubling experiment (--double-frames)
+    int repeatMultiple(double intervalSec) const;
+    bool doubling_ = false;
+    FrameParams lastFp_;           // the frame last presented, shown again for each repeat
+    bool haveLastFp_ = false;
+    double repeatExpectMs_ = 0.0;  // requested gap between the flips while repeating
+    int64_t lastAnyFlipNs_ = 0;    // last flip of a frame or a repeat
+    int stepRepeats_ = 0, stepRepeatsOk_ = 0;
+
     std::string message_;
     int64_t messageUntil_ = 0;
 };

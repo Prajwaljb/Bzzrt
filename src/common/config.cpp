@@ -18,6 +18,8 @@ void printUsage(const char* argv0) {
         "                             kms    = direct DRM/KMS page flips from a text console\n"
         "  --wsi auto|wayland|x11     Vulkan window system (default auto)\n"
         "  --kms-device /dev/dri/cardN   --kms-connector DP-2   --kms-mode 2560x1440@200\n"
+        "  --double-frames            Experiment (kms only): the app shows frames below the VRR minimum\n"
+        "                             twice at even intervals, as a driver with LFC would\n"
 #endif
         "  --gpu N                    GPU / adapter index (default: first usable)\n"
         "  --present ID               Present mode id (see overlay; e.g. fifo, mailbox, immediate,\n"
@@ -152,6 +154,7 @@ bool parseArgs(int argc, char** argv, Config& c, std::string& err) {
         else if (a == "--kms-device") { if (!str(c.kmsDevice)) return false; }
         else if (a == "--kms-connector") { if (!str(c.kmsConnector)) return false; }
         else if (a == "--kms-mode") { if (!str(c.kmsMode)) return false; }
+        else if (a == "--double-frames") c.doubleFrames = true;
         else {
             err = "unknown option: " + a;
             return false;

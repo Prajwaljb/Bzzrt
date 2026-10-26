@@ -135,7 +135,7 @@ std::string osdSentence(double fps, int osdHz, double refreshHz, double vrrMinHz
                 std::snprintf(buf, sizeof buf, "%d Hz = the frame rate: VRR follows the frames exactly.", osdHz);
             else
                 std::snprintf(buf, sizeof buf,
-                              "%d Hz = %d x %.0f FPS: VRR is working. The driver shows each frame %d times.", osdHz,
+                              "%d Hz = %d x %.0f FPS: VRR is working. Each frame is shown %d times.", osdHz,
                               r.multiple, fps, r.multiple);
             break;
         case OsdFit::Ambiguous:
@@ -224,8 +224,82 @@ std::string timingSentence(const GuidedStep& step, const StepResult& r) {
     return "";
 }
 
+namespace {
+
+// The frame doubling experiment asks one question: does the flicker below the minimum go away when every frame
+// is shown twice at even intervals, as a driver with LFC would do it?
+std::vector<std::string> doublingConclusion(const std::vector<StepResult>& results, double refreshHz,
+                                            double vrrMinHz) {
+    const auto& steps = guidedSteps(false);
+    std::vector<std::string> out;
+    std::vector<int> appLate, notDoubled, osdOff, clean, flicker, changingFlicker, inRangeFlicker;
+    int answered = 0;
+    for (size_t i = 0; i < results.size() && i < steps.size(); ++i) {
+        const auto& r = results[i];
+        const int idx = static_cast<int>(i);
+        if (r.verdict.timing == Timing::AppLate) {
+            appLate.push_back(idx);
+            continue;
+        }
+        if (r.answer == Answer::Yes || r.answer == Answer::No) ++answered;
+        if (r.repeats == 0) {
+            if (r.answer == Answer::Yes) inRangeFlicker.push_back(idx);
+            continue;
+        }
+        // The repeats only test the idea if they reached the screen between evenly paced frames.
+        if (r.repeatOkPct < 90.0 || r.verdict.timing != Timing::Even) {
+            notDoubled.push_back(idx);
+            continue;
+        }
+        if (!steps[i].changing && r.osdHz > 0) {
+            const OsdReading o = interpretOsd(r.targetFps, r.osdHz, refreshHz, vrrMinHz);
+            if (o.fit != OsdFit::Multiple || o.multiple != r.multiple) osdOff.push_back(idx);
+        }
+        if (r.answer == Answer::Yes) (steps[i].changing ? changingFlicker : flicker).push_back(idx);
+        else if (r.answer == Answer::No) clean.push_back(idx);
+    }
+
+    if (!appLate.empty())
+        out.push_back("NOT COUNTED: in step " + stepList(appLate) + " the app itself could not keep up and missed its "
+                      "own frame times, so those results say nothing about the monitor or the driver.");
+    if (!notDoubled.empty())
+        out.push_back("DOUBLING DID NOT WORK in step " + stepList(notDoubled) + ": the repeated frames or the frames "
+                      "themselves did not reach the screen at the requested times, so those steps do not test the idea.");
+    if (!osdOff.empty())
+        out.push_back("In step " + stepList(osdOff) + " the monitor's reading did not match the doubled refresh rate, so "
+                      "the extra refreshes may not have reached the panel there.");
+
+    if (answered == 0) {
+        out.push_back("No answers were recorded, so there is nothing to conclude about flicker.");
+    } else if (!flicker.empty()) {
+        out.push_back("STILL FLICKERS WITH FRAME DOUBLING: step " + stepList(flicker) + " flickered although every frame "
+                      "was shown several times at even intervals, keeping the monitor well inside its range. Missing "
+                      "frame doubling does not explain that flicker; it points to the monitor itself.");
+        if (!clean.empty())
+            out.push_back("Doubling did remove the flicker in step " + stepList(clean) + ".");
+    } else if (!clean.empty()) {
+        out.push_back("FRAME DOUBLING REMOVES THE FLICKER: with every frame shown twice at even intervals, step " +
+                      stepList(clean) + " showed no flicker. The monitor handles these frame rates fine when frames are "
+                      "doubled. If the same steps flicker in a normal run (without --double-frames), the cause is the "
+                      "missing frame doubling (LFC) in this system's graphics driver, not the monitor.");
+    }
+    if (!changingFlicker.empty())
+        out.push_back("Flicker while the frame rate changed (step " + stepList(changingFlicker) + "), even with "
+                      "doubling. Small brightness shifts when the refresh rate changes are a known VRR side effect on "
+                      "many monitors (especially VA panels) and not necessarily a defect.");
+    if (!inRangeFlicker.empty())
+        out.push_back("Flicker in step " + stepList(inRangeFlicker) + ", which is inside the VRR range and needed no "
+                      "doubling.");
+    out.push_back("Software cannot see what the panel itself does. The monitor's own refresh-rate readout (OSD) is "
+                  "the final word on what it is doing.");
+    return out;
+}
+
+}  // namespace
+
 std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results, double vrrMinHz, double refreshHz,
-                                          bool lowRefresh) {
+                                          bool lowRefresh, bool doubling) {
+    if (doubling && !lowRefresh) return doublingConclusion(results, refreshHz, vrrMinHz);
     const auto& steps = guidedSteps(lowRefresh);
     std::vector<std::string> out;
     std::vector<int> evenSteady, evenChanging, uneven, unknown, noVrr, unevenQuiet;
