@@ -89,6 +89,7 @@ private:
     int64_t stepStartNs_ = 0;
     int64_t answerNs_ = 0;
     Answer answer_ = Answer::None;
+    std::string osdInput_;  // digits typed for the monitor's OSD refresh reading
     std::vector<TimingSample> stepSamples_;
     std::vector<StepResult> results_;
     std::string reportPath_;

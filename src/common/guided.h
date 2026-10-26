@@ -44,8 +44,21 @@ struct StepResult {
     TimingVerdict verdict;
     Answer answer = Answer::None;
     double targetFps = 0.0;  // steady steps only, 0 for changing steps
+    int osdHz = 0;           // refresh rate the user read off the monitor's OSD, 0 = not entered
     std::string csvPath;
 };
+
+// What the monitor's own refresh readout (OSD) means at a steady frame rate. With VRR the panel
+// refreshes at the frame rate or a whole multiple of it (the driver may show each frame k times).
+enum class OsdFit { None, Multiple, Ambiguous, FixedRefresh, Mismatch };
+struct OsdReading {
+    OsdFit fit = OsdFit::None;
+    int multiple = 0;  // k for Multiple / Ambiguous
+};
+OsdReading interpretOsd(double fps, int osdHz, double refreshHz);
+// e.g. "90 or 180 Hz": the readings that are consistent with VRR at this frame rate.
+std::string osdExpected(double fps, double vrrMinHz, double vrrMaxHz);
+std::string osdSentence(double fps, int osdHz, double refreshHz);
 
 const char* timingLabel(Timing t);
 const char* answerLabel(Answer a);

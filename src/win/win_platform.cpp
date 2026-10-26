@@ -48,7 +48,12 @@ static Key keyFromVk(WPARAM vk) {
         case 'S': return Key::S;
         case VK_RETURN: return Key::Enter;
         case VK_TAB: return Key::Tab;
-        default: return Key::None;
+        case VK_BACK: return Key::Backspace;
+        default:
+            if (vk >= '0' && vk <= '9') return static_cast<Key>(static_cast<int>(Key::D0) + static_cast<int>(vk - '0'));
+            if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9)
+                return static_cast<Key>(static_cast<int>(Key::D0) + static_cast<int>(vk - VK_NUMPAD0));
+            return Key::None;
     }
 }
 

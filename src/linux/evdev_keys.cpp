@@ -37,6 +37,17 @@ Key keyFromEvdev(uint32_t code) {
         case KEY_ENTER:
         case KEY_KPENTER: return Key::Enter;
         case KEY_TAB: return Key::Tab;
+        case KEY_BACKSPACE: return Key::Backspace;
+        case KEY_0: case KEY_KP0: return Key::D0;
+        case KEY_1: case KEY_KP1: return Key::D1;
+        case KEY_2: case KEY_KP2: return Key::D2;
+        case KEY_3: case KEY_KP3: return Key::D3;
+        case KEY_4: case KEY_KP4: return Key::D4;
+        case KEY_5: case KEY_KP5: return Key::D5;
+        case KEY_6: case KEY_KP6: return Key::D6;
+        case KEY_7: case KEY_KP7: return Key::D7;
+        case KEY_8: case KEY_KP8: return Key::D8;
+        case KEY_9: case KEY_KP9: return Key::D9;
         default: return Key::None;
     }
 }

@@ -14,8 +14,13 @@ const char* windowModeName(WindowMode m);
 enum class Key {
     None, Space, Up, Down, Left, Right, PageUp, PageDown, Plus, Minus,
     Fullscreen, V, P, G, C, H, L, R, K, LBracket, RBracket, Escape, Q,
-    Y, N, S, Enter, Tab
+    Y, N, S, Enter, Tab, Backspace,
+    D0, D1, D2, D3, D4, D5, D6, D7, D8, D9  // keep contiguous: digit = key - D0
 };
+
+inline int keyDigit(Key k) {
+    return (k >= Key::D0 && k <= Key::D9) ? static_cast<int>(k) - static_cast<int>(Key::D0) : -1;
+}
 
 struct KeyEvent {
     Key key = Key::None;

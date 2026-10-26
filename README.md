@@ -111,6 +111,11 @@ REFRESH**, VRR off). The result screen combines this with your answers:
 - flicker only where the timing was **uneven** -> caused on the **computer side** (driver / compositor);
 - run the same check on Windows and Linux and compare.
 
+If your monitor's menu (OSD) can show the current refresh rate, type the number during each steady test. With VRR the
+panel refreshes at the frame rate **or a whole multiple of it**: many drivers show each frame several times to keep the
+refresh rate high, so 90 FPS can read 180 Hz and 45 FPS can read 90 or 180 Hz. That is VRR working, not a fault. A
+reading stuck at the fixed refresh rate (e.g. 200 Hz at 90 FPS) means VRR is off. The app explains each reading.
+
 The result is also saved as `vrrdiag-report-<date>.txt` next to the per-test CSV logs. **H** hides the text,
 **LEFT/RIGHT** change the pattern, **F** toggles fullscreen, **ESC** cancels, **TAB** opens the advanced test bench.
 

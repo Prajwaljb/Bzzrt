@@ -72,6 +72,64 @@ TimingVerdict analyzeTiming(const std::vector<TimingSample>& s, double refreshHz
     return v;
 }
 
+OsdReading interpretOsd(double fps, int osdHz, double refreshHz) {
+    OsdReading r;
+    if (fps <= 0 || osdHz <= 0) return r;
+    const double h = osdHz;
+    const int k = static_cast<int>(std::lround(h / fps));
+    // OSDs round to whole Hz and some average over a moment, so allow a few Hz of slack.
+    const bool multiple = k >= 1 && std::fabs(h - k * fps) <= std::max(2.0, 0.02 * h);
+    const bool fixed = refreshHz > 0 && std::fabs(h - refreshHz) <= 2.0;
+    if (multiple) {
+        r.fit = fixed ? OsdFit::Ambiguous : OsdFit::Multiple;
+        r.multiple = k;
+    } else {
+        r.fit = fixed ? OsdFit::FixedRefresh : OsdFit::Mismatch;
+    }
+    return r;
+}
+
+std::string osdExpected(double fps, double vrrMinHz, double vrrMaxHz) {
+    std::vector<int> hz;
+    for (int k = 1; k * fps <= vrrMaxHz + 0.5; ++k)
+        if (k * fps >= vrrMinHz - 0.5) hz.push_back(static_cast<int>(std::lround(k * fps)));
+    std::string s;
+    for (size_t i = 0; i < hz.size(); ++i) {
+        if (i) s += (i + 1 == hz.size()) ? " or " : ", ";
+        s += std::to_string(hz[i]);
+    }
+    return s + " Hz";
+}
+
+std::string osdSentence(double fps, int osdHz, double refreshHz) {
+    const OsdReading r = interpretOsd(fps, osdHz, refreshHz);
+    char buf[256];
+    switch (r.fit) {
+        case OsdFit::Multiple:
+            if (r.multiple == 1)
+                std::snprintf(buf, sizeof buf, "%d Hz = the frame rate: VRR follows the frames exactly.", osdHz);
+            else
+                std::snprintf(buf, sizeof buf,
+                              "%d Hz = %d x %.0f FPS: VRR is working. The driver shows each frame %d times.", osdHz,
+                              r.multiple, fps, r.multiple);
+            break;
+        case OsdFit::Ambiguous:
+            std::snprintf(buf, sizeof buf,
+                          "%d Hz = %d x %.0f FPS, but also the fixed refresh rate, so this test cannot tell.", osdHz,
+                          r.multiple, fps);
+            break;
+        case OsdFit::FixedRefresh:
+            std::snprintf(buf, sizeof buf, "%d Hz is the fixed refresh rate, not a multiple of %.0f FPS: VRR is OFF.",
+                          osdHz, fps);
+            break;
+        case OsdFit::Mismatch:
+            std::snprintf(buf, sizeof buf, "%d Hz does not fit %.0f FPS (not a whole multiple of it).", osdHz, fps);
+            break;
+        default: return "";
+    }
+    return buf;
+}
+
 const char* timingLabel(Timing t) {
     switch (t) {
         case Timing::Even: return "EVEN";
@@ -114,7 +172,8 @@ std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results
     const auto& steps = guidedSteps();
     std::vector<std::string> out;
     std::vector<int> evenSteady, evenChanging, uneven, unknown, noVrr, unevenQuiet;
-    int answered = 0, vrrProof = 0, noData = 0;
+    std::vector<int> osdMultiplied, osdFixed, osdMismatch;
+    int answered = 0, vrrProof = 0, noData = 0, osdProof = 0;
     const double period = refreshHz > 0 ? 1000.0 / refreshHz : 0.0;
 
     for (size_t i = 0; i < results.size() && i < steps.size(); ++i) {
@@ -130,6 +189,15 @@ std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results
             if (t == Timing::Even && !multiple) ++vrrProof;
             if (t == Timing::FixedRefresh || (t == Timing::Uneven && !multiple)) noVrr.push_back(static_cast<int>(i));
         }
+        if (!steps[i].changing && r.osdHz > 0) {
+            const OsdReading o = interpretOsd(r.targetFps, r.osdHz, refreshHz);
+            if (o.fit == OsdFit::Multiple) {
+                ++osdProof;
+                if (o.multiple > 1) osdMultiplied.push_back(static_cast<int>(i));
+            }
+            if (o.fit == OsdFit::FixedRefresh) osdFixed.push_back(static_cast<int>(i));
+            if (o.fit == OsdFit::Mismatch) osdMismatch.push_back(static_cast<int>(i));
+        }
         if (r.answer != Answer::None && r.answer != Answer::Unsure) ++answered;
         if (r.answer != Answer::Yes) continue;
         if (t == Timing::Even) (steps[i].changing ? evenChanging : evenSteady).push_back(static_cast<int>(i));
@@ -138,7 +206,10 @@ std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results
     }
 
     // 1. Was VRR actually in use?
-    if (noData == static_cast<int>(results.size())) {
+    if (vrrProof == 0 && osdProof > 0 && osdFixed.empty()) {
+        out.push_back("VRR WAS ACTIVE according to your monitor's readout: it refreshed at the frame rate or a whole "
+                      "multiple of it, which a fixed refresh rate cannot do.");
+    } else if (noData == static_cast<int>(results.size())) {
         out.push_back("This system cannot report when frames reach the screen (common with X11 / XWayland), so only "
                       "your own observations count. Try the Wayland session on Linux, or Windows.");
     } else if (vrrProof > 0) {
@@ -155,6 +226,19 @@ std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results
 #endif
                       );
     }
+
+    if (!osdMultiplied.empty())
+        out.push_back("FRAME MULTIPLICATION (step " + stepList(osdMultiplied) +
+                      "): the monitor showed a whole multiple of the frame rate, e.g. 180 Hz at 90 FPS. The driver "
+                      "shows each frame several times to keep the refresh rate high. This is VRR working; the Hz "
+                      "reading is not supposed to equal the FPS, and it is not a fault.");
+    if (!osdFixed.empty())
+        out.push_back("Your monitor stayed at its fixed refresh rate in step " + stepList(osdFixed) +
+                      ", so VRR was not active there.");
+    if (!osdMismatch.empty())
+        out.push_back("The monitor's reading in step " + stepList(osdMismatch) +
+                      " did not fit the frame rate. Some monitors average or delay this readout; if it keeps "
+                      "happening at a steady frame rate, note it when comparing with the other system.");
 
     // 2. Where did flicker appear, and was the computer's timing clean there?
     if (answered == 0 && evenSteady.empty() && evenChanging.empty() && uneven.empty() && unknown.empty()) {

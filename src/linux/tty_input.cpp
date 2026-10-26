@@ -76,7 +76,13 @@ void TtyInput::poll(std::vector<KeyEvent>& keys) {
             case '\r':
             case '\n': k = Key::Enter; break;
             case '\t': k = Key::Tab; break;
+            case 0x7f:
+            case 0x08: k = Key::Backspace; break;
             default: {
+                if (c >= '0' && c <= '9') {
+                    k = static_cast<Key>(static_cast<int>(Key::D0) + (c - '0'));
+                    break;
+                }
                 const unsigned char lower = (c >= 'A' && c <= 'Z') ? static_cast<unsigned char>(c + 32) : c;
                 shift = c >= 'A' && c <= 'Z';
                 switch (lower) {

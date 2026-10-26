@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 
 #include "clock.h"
@@ -500,7 +501,17 @@ void App::handleGuidedKey(const KeyEvent& k) {
         case Key::Left: pattern_ = (pattern_ + kPatCount - 1) % kPatCount; break;
         case Key::Right: pattern_ = (pattern_ + 1) % kPatCount; break;
         case Key::H: overlayVisible_ = !overlayVisible_; break;
-        default: break;
+        case Key::Backspace:
+            if (mode_ == Mode::Step && !osdInput_.empty()) osdInput_.pop_back();
+            break;
+        default:
+            if (mode_ == Mode::Step && keyDigit(k.key) >= 0 && osdInput_.size() < 3 &&
+                !guidedSteps()[stepIdx_].changing) {
+                osdInput_ += static_cast<char>('0' + keyDigit(k.key));
+                // Typing after answering keeps the step open a little longer.
+                if (answer_ != Answer::None) answerNs_ = nowNs();
+            }
+            break;
     }
 }
 
@@ -510,6 +521,7 @@ void App::startStep(int index) {
     mode_ = Mode::Step;
     stepIdx_ = index;
     answer_ = Answer::None;
+    osdInput_.clear();
     stepSamples_.clear();
     testIdx_ = findTest(step.testId);
     TestParams p = params_;
@@ -530,6 +542,7 @@ void App::finishStep() {
     r.answer = answer_;
     const TestDef& def = allTests()[testIdx_];
     r.targetFps = def.kind == TestKind::Stable ? def.fpsA : 0.0;
+    r.osdHz = osdInput_.empty() ? 0 : std::atoi(osdInput_.c_str());
     r.csvPath = lastLogPath_;
     stopTest("completed");
     results_.push_back(r);
@@ -564,6 +577,7 @@ void App::writeReport() {
                             timingLabel(r.verdict.timing), answerLabel(r.answer)));
         lines.push_back("   " + timingSentence(steps[i], r) +
                         fmt(" [%d intervals, %.0f%% on time]", r.verdict.samples, r.verdict.onTimePct));
+        if (r.osdHz > 0) lines.push_back("   Monitor OSD: " + osdSentence(r.targetFps, r.osdHz, dinfo_.refreshHz));
         if (!r.csvPath.empty()) lines.push_back("   log: " + r.csvPath);
     }
     lines.push_back("");
@@ -607,7 +621,7 @@ void App::buildGuidedOverlay(int64_t now) {
         add("   S   not sure", kYellow);
         add("");
         add("Tips: dim the room and look at the plain gray area. If your monitor's menu can show the current "
-            "refresh rate, keep it open while testing.", kGray);
+            "refresh rate, keep it open and type the number it shows during each test.", kGray);
         add("");
         std::string mon = "Monitor: " + dinfo_.outputName;
         if (!dinfo_.monitorName.empty()) mon += " " + dinfo_.monitorName;
@@ -641,6 +655,22 @@ void App::buildGuidedOverlay(int64_t now) {
             add(std::string("Timing: ") + timingLabel(live.verdict.timing) + " - " + timingSentence(step, live), c);
         }
         if (windowed) add("Not fullscreen: VRR is probably off. Press F.", kRed);
+        if (step.changing) {
+            add("Your monitor's Hz reading will jump around in this test; no need to type it.", kGray);
+        } else {
+            add("Monitor Hz with VRR: " + osdExpected(live.targetFps, cfg_.vrrMinHz, cfg_.vrrMaxHz) +
+                    " (a whole multiple of the FPS)",
+                kGray);
+            if (osdInput_.empty()) {
+                add("Type the Hz your monitor shows (optional): _", kWhite);
+            } else {
+                const OsdReading o = interpretOsd(live.targetFps, std::atoi(osdInput_.c_str()), dinfo_.refreshHz);
+                const uint32_t c = o.fit == OsdFit::Multiple ? kGreen : o.fit == OsdFit::Ambiguous ? kYellow : kRed;
+                add("Monitor shows: " + osdInput_ + "_   " +
+                        osdSentence(live.targetFps, std::atoi(osdInput_.c_str()), dinfo_.refreshHz),
+                    c);
+            }
+        }
         add("");
         if (answer_ == Answer::None) {
             add("Do you see flicker?    Y  yes    N  no    S  not sure", kYellow);
@@ -655,14 +685,15 @@ void App::buildGuidedOverlay(int64_t now) {
         add("H hide text   LEFT/RIGHT pattern   ESC cancel", kGray);
     } else {
         title("RESULT", kGreen);
-        add(fmt("  %-24s %-13s %s", "TEST", "TIMING", "YOU SAW"), kGray);
+        add(fmt("  %-24s %-13s %-11s %s", "TEST", "TIMING", "YOU SAW", "MONITOR"), kGray);
         for (size_t i = 0; i < results_.size(); ++i) {
             const auto& r = results_[i];
             uint32_t c = kWhite;
             if (r.verdict.timing == Timing::Uneven || r.verdict.timing == Timing::FixedRefresh) c = kRed;
             if (r.answer == Answer::Yes) c = kYellow;
-            add(fmt("%d %-24s %-13s %s", static_cast<int>(i + 1), steps[i].title, timingLabel(r.verdict.timing),
-                    answerLabel(r.answer)),
+            const std::string osd = r.osdHz > 0 ? fmt("%d Hz", r.osdHz) : std::string("-");
+            add(fmt("%d %-24s %-13s %-11s %s", static_cast<int>(i + 1), steps[i].title, timingLabel(r.verdict.timing),
+                    answerLabel(r.answer), osd.c_str()),
                 c);
         }
         add("");
@@ -862,7 +893,7 @@ int App::run() {
         if (mode_ == Mode::Step && answer_ != Answer::None) {
             const int64_t t = nowNs();
             // Each step measures for at least kStepMinNs; after an answer the confirmation stays up briefly.
-            if (t - stepStartNs_ >= kStepMinNs && t - answerNs_ >= 1200000000LL) finishStep();
+            if (t - stepStartNs_ >= kStepMinNs && t - answerNs_ >= 2000000000LL) finishStep();
         }
         if (mode_ == Mode::Advanced && running_ && duration_ > 0 &&
             static_cast<double>(tCall - testStartNs_) / 1e9 >= duration_) {
