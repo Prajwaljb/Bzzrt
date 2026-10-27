@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b1020"/><stop offset="1" stop-color="#1a1440"/></linearGradient><linearGradient id="ok" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#2dd4bf" stop-opacity=".35"/><stop offset="1" stop-color="#2dd4bf"/></linearGradient><linearGradient id="lfc" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#f59e0b" stop-opacity=".35"/><stop offset="1" stop-color="#fbbf24"/></linearGradient><linearGradient id="spk" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#f43f5e" stop-opacity=".35"/><stop offset="1" stop-color="#fb7185"/></linearGradient></defs>
+<rect width="1280" height="360" rx="18" fill="url(#bg)"/>
+<text x="72" y="166.0" font-family="Inter, Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" font-size="76" font-weight="800" fill="#f8fafc" letter-spacing="-1">Synchora</text>
+<text x="74" y="212.0" font-family="Inter, Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" fill="#cbd5e1">VRR flicker &amp; LFC diagnostic</text>
+<text x="74" y="252.0" font-family="Inter, Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" font-size="19" fill="#94a3b8" letter-spacing="2">WINDOWS · LINUX · MACOS</text>
+<rect x="683.6" y="228.0" width="11.7" height="62.0" rx="3" fill="url(#ok)"/>
+<rect x="702.5" y="228.0" width="11.7" height="62.0" rx="3" fill="url(#ok)"/>
+<rect x="721.5" y="224.9" width="11.7" height="65.1" rx="3" fill="url(#ok)"/>
+<rect x="740.4" y="228.0" width="11.7" height="62.0" rx="3" fill="url(#ok)"/>
+<rect x="759.3" y="221.8" width="11.7" height="68.2" rx="3" fill="url(#ok)"/>
+<rect x="778.2" y="215.6" width="11.7" height="74.4" rx="3" fill="url(#ok)"/>
+<rect x="797.2" y="206.3" width="11.7" height="83.7" rx="3" fill="url(#ok)"/>
+<rect x="816.1" y="197.0" width="11.7" height="93.0" rx="3" fill="url(#ok)"/>
+<rect x="835.0" y="184.6" width="11.7" height="105.4" rx="3" fill="url(#ok)"/>
+<rect x="854.0" y="172.2" width="11.7" height="117.8" rx="3" fill="url(#ok)"/>
+<rect x="872.9" y="156.7" width="11.7" height="133.3" rx="3" fill="url(#lfc)"/>
+<rect x="891.8" y="141.2" width="11.7" height="148.8" rx="3" fill="url(#lfc)"/>
+<rect x="910.7" y="135.0" width="11.7" height="155.0" rx="3" fill="url(#lfc)"/>
+<rect x="929.7" y="138.1" width="11.7" height="151.9" rx="3" fill="url(#lfc)"/>
+<rect x="948.6" y="135.0" width="11.7" height="155.0" rx="3" fill="url(#lfc)"/>
+<rect x="967.5" y="147.4" width="11.7" height="142.6" rx="3" fill="url(#lfc)"/>
+<rect x="986.5" y="166.0" width="11.7" height="124.0" rx="3" fill="url(#ok)"/>
+<rect x="1005.4" y="184.6" width="11.7" height="105.4" rx="3" fill="url(#ok)"/>
+<rect x="1024.3" y="203.2" width="11.7" height="86.8" rx="3" fill="url(#ok)"/>
+<rect x="1043.2" y="215.6" width="11.7" height="74.4" rx="3" fill="url(#ok)"/>
+<rect x="1062.2" y="221.8" width="11.7" height="68.2" rx="3" fill="url(#ok)"/>
+<rect x="1081.1" y="228.0" width="11.7" height="62.0" rx="3" fill="url(#ok)"/>
+<rect x="1100.0" y="228.0" width="11.7" height="62.0" rx="3" fill="url(#ok)"/>
+<rect x="1119.0" y="104.0" width="11.7" height="186.0" rx="3" fill="url(#spk)"/>
+<rect x="1137.9" y="228.0" width="11.7" height="62.0" rx="3" fill="url(#ok)"/>
+<rect x="1156.8" y="228.0" width="11.7" height="62.0" rx="3" fill="url(#ok)"/>
+<rect x="1175.7" y="224.9" width="11.7" height="65.1" rx="3" fill="url(#ok)"/>
+<rect x="1194.7" y="228.0" width="11.7" height="62.0" rx="3" fill="url(#ok)"/>
+<line x1="670" y1="161.0" x2="1220" y2="161.0" stroke="#e2e8f0" stroke-opacity=".55" stroke-width="2" stroke-dasharray="7 6"/>
+<text x="670" y="149.0" font-family="Inter, Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" fill="#e2e8f0" fill-opacity=".75">VRR minimum</text>
+<line x1="670" y1="290.0" x2="1220" y2="290.0" stroke="#475569" stroke-width="2"/>
+<text x="670" y="320.0" font-family="Inter, Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" fill="#94a3b8">frame time</text>
+<rect x="790" y="308.0" width="14" height="14" rx="3" fill="#2dd4bf"/>
+<text x="812" y="320.0" font-family="Inter, Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" fill="#cbd5e1">in VRR range</text>
+<rect x="940.0" y="308.0" width="14" height="14" rx="3" fill="#fbbf24"/>
+<text x="962.0" y="320.0" font-family="Inter, Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" fill="#cbd5e1">LFC</text>
+<rect x="1013.5" y="308.0" width="14" height="14" rx="3" fill="#fb7185"/>
+<text x="1035.5" y="320.0" font-family="Inter, Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" fill="#cbd5e1">spike</text>
+</svg>

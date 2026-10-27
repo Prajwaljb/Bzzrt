@@ -1,13 +1,45 @@
-# Synchora (`vrrdiag`): VRR / FreeSync / G-SYNC flicker and LFC diagnostic
+<p align="center">
+  <img src="docs/banner.svg" alt="Synchora: VRR flicker and LFC diagnostic for Windows, Linux and macOS" width="100%">
+</p>
 
-Does VRR flicker come from your monitor or from your computer? Synchora runs a guided 2-minute check on any
-Adaptive-Sync, FreeSync, G-SYNC Compatible, HDMI VRR or ProMotion display, on **Windows, Linux and macOS**, and tells you.
+<p align="center">
+  <b>Does your VRR flicker come from the monitor or from the computer?</b><br>
+  A guided 2-minute check for FreeSync, G-SYNC Compatible, Adaptive-Sync, HDMI VRR and ProMotion displays.
+</p>
 
-**Download:** [latest release](https://github.com/Prajwaljb/Synchora/releases/latest): `windows-x64.zip`,
-`linux-x86_64.tar.gz` or `macos-arm64.zip`. Unpack, start it on the monitor you want to test and press ENTER
-(see [QUICKSTART](packaging/QUICKSTART.txt)).
+<p align="center">
+  <a href="https://github.com/Prajwaljb/Synchora/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Prajwaljb/Synchora?style=flat-square&color=2dd4bf"></a>
+  <a href="https://github.com/Prajwaljb/Synchora/actions/workflows/build.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/Prajwaljb/Synchora/build.yml?branch=main&style=flat-square"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-6366f1?style=flat-square">
+  <img alt="APIs" src="https://img.shields.io/badge/D3D12%20%7C%20Vulkan%20%7C%20Metal-native-f59e0b?style=flat-square">
+  <a href="https://github.com/Prajwaljb/Synchora/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/Prajwaljb/Synchora/total?style=flat-square&color=fb7185"></a>
+</p>
 
-Under the hood `vrrdiag` generates **controlled presentation timing** (exact frame intervals, scripted
+<p align="center">
+  <a href="#download">Download</a> ·
+  <a href="packaging/QUICKSTART.txt">Quickstart</a> ·
+  <a href="docs/VRR_LFC_GUIDE.md">VRR &amp; LFC guide</a> ·
+  <a href="#2-running">Usage</a> ·
+  <a href="#1-building">Building</a>
+</p>
+
+---
+
+## Download
+
+| Platform | Package | Needs |
+|---|---|---|
+| 🪟 **Windows** 10/11 x64 | [`synchora-1.0.0-windows-x64.zip`](https://github.com/Prajwaljb/Synchora/releases/latest/download/synchora-1.0.0-windows-x64.zip) | D3D12 or D3D11 GPU |
+| 🐧 **Linux** x86_64 | [`synchora-1.0.0-linux-x86_64.tar.gz`](https://github.com/Prajwaljb/Synchora/releases/latest/download/synchora-1.0.0-linux-x86_64.tar.gz) | Vulkan driver, glibc 2.34+ (Ubuntu 22.04+, Fedora 35+, Arch) |
+| 🍎 **macOS** 12+ Apple silicon | [`synchora-1.0.0-macos-arm64.zip`](https://github.com/Prajwaljb/Synchora/releases/latest/download/synchora-1.0.0-macos-arm64.zip) | not notarized: allow it once under System Settings → Privacy & Security → *Open Anyway* |
+
+Unpack it, start it on the monitor you want to test and press **ENTER**. Synchora reads the monitor's VRR range from
+its EDID. If it can't find one, or the detected range is wrong, you type in the range before the test starts
+(see [QUICKSTART](packaging/QUICKSTART.txt)). Checksums are in `SHA256SUMS` on the release page.
+
+## What it does
+
+`vrrdiag` generates **controlled presentation timing** (exact frame intervals, scripted
 rate switches, frame-time spikes and jitter) so you can find out whether VRR flicker comes from:
 
 * low framerate compensation (LFC, frame multiplication below the VRR floor),
@@ -15,7 +47,7 @@ rate switches, frame-time spikes and jitter) so you can find out whether VRR fli
 * transitions between normal VRR and LFC, or
 * something unrelated to VRR (cable, link, panel, overdrive, FRC).
 
-It is a native application:
+It is a native application on every platform:
 
 | Platform | Backend | Presentation path |
 |---|---|---|
