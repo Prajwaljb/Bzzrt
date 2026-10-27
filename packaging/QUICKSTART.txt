@@ -2,26 +2,39 @@ Synchora - VRR flicker check
 ============================
 
 Does VRR flicker come from your monitor or from your computer? This tool finds out.
+Works with FreeSync, Adaptive-Sync, G-SYNC Compatible, HDMI VRR and ProMotion displays.
 
-1. Turn on Adaptive-Sync / FreeSync in the monitor's own menu.
+1. Turn on Adaptive-Sync / FreeSync in the monitor's own menu, and in the system:
    Windows: Settings > System > Display > Graphics > Variable refresh rate = On.
    KDE: System Settings > Display Configuration > Adaptive sync = Always (or Automatic).
-2. Start the app ON THE MONITOR YOU WANT TO TEST (Windows: double-click vrrdiag.exe
-   there; Linux: run ./vrrdiag-launch).
-3. Read the start screen. Yellow lines are setup problems worth fixing first.
+   GNOME 50+: Settings > Displays > Variable Refresh Rate.
+   macOS 14+: System Settings > Displays > Refresh Rate = Variable.
+   Set the display to its highest refresh rate.
+2. Start the app ON THE MONITOR YOU WANT TO TEST:
+   Windows: double-click vrrdiag.exe there.  Linux: run ./vrrdiag-launch.
+   macOS: open Synchora.app. The first time, right-click it and choose Open (macOS 15:
+   System Settings > Privacy & Security > Open Anyway), because it is not notarized.
+3. Read the start screen. It shows the monitor's VRR range, read from the monitor itself.
+   If it says UNKNOWN, press ENTER and type the range from the monitor's spec sheet
+   (e.g. 48, ENTER, 144, ENTER, ENTER). It is remembered. R changes it later.
+   Yellow lines are setup problems worth fixing first.
 4. Press ENTER. Eight 10-second tests follow on a dark gray screen.
    For each one press  Y = I see flicker,  N = no flicker,  S = not sure.
+   If the monitor's menu can show the current refresh rate, type the number you see.
 5. The result screen tells you whether the flicker points to the monitor or to the
-   computer's graphics driver. It is also saved as vrrdiag-report-<date>.txt.
+   computer's graphics driver. It is also saved as vrrdiag-report-<date>.txt
+   (macOS: in Documents/Synchora).
 
-Keys: F = windowed / borderless / exclusive fullscreen, H = hide text,
+Keys: F = windowed / fullscreen (/ exclusive on Windows), R = VRR range, H = hide text,
       LEFT/RIGHT = change pattern, ESC = cancel, TAB = advanced test bench, Q = quit.
 
 If the result says "VRR WAS NOT ACTIVE": check step 1, keep the app fullscreen, and on
 Windows press F until it says "Exclusive fullscreen", then run the check again.
 
-Run the check on both Windows and Linux and compare. Flicker in the same tests on both
-points to the monitor; flicker on only one of them points to that system's driver.
+Run the check on two systems (e.g. Windows and Linux) and compare. Flicker in the same
+tests on both points to the monitor; flicker on only one of them points to that system's
+driver. To test whether missing frame doubling (LFC) is the cause, run the check with
+--double-frames: the app then doubles slow frames itself.
 
 Software cannot see what the panel itself does: the monitor's own refresh-rate readout
 (OSD) is the final word. Full documentation: README.md and VRR_LFC_GUIDE.md.

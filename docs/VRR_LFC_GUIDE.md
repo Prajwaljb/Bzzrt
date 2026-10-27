@@ -1,7 +1,8 @@
 # VRR / LFC flicker: theory, test procedure and interpretation
 
-Target monitor in the examples: **BenQ EW270Q**: 2560×1440, 200 Hz, VA panel, FreeSync/Adaptive-Sync,
-VRR range about **48–200 Hz**, DisplayPort or USB-C (DP Alt Mode), possibly 8-bit + FRC.
+Monitor in the examples: **BenQ EW270Q**: 2560×1440, 200 Hz, FreeSync/Adaptive-Sync, VRR range **48–200 Hz**,
+DisplayPort or USB-C (DP Alt Mode). For your monitor, read 48 and 200 as its own minimum and maximum: the guided check
+builds its tests from the range it detects (or that you enter), and the advanced tests take `--fps` for any rate.
 
 ---
 
@@ -20,9 +21,10 @@ by then, new frame or not.
   * **No LFC**: when the 20.83 ms limit is reached the hardware forces a repeat scanout of the old frame. A new
     frame arriving during that repeat waits up to one scanout (≈5 ms). The refresh pattern becomes irregular.
 
-LFC is implemented by the driver, so **Windows and Linux can behave differently on the same monitor**:
-AMD Windows driver ≠ amdgpu (kernel "BTR"), Intel Windows driver ≠ i915/xe, NVIDIA Windows ≠ NVIDIA Linux.
-On Linux the compositor sits in the path as well, so the timing it presents with matters.
+LFC is implemented by the driver, so **Windows, Linux and macOS can behave differently on the same monitor**:
+AMD Windows driver ≠ amdgpu (kernel "BTR"), Intel Windows driver ≠ i915/xe, NVIDIA Windows ≠ NVIDIA Linux, and macOS
+has its own display pipeline. On Linux the compositor sits in the path as well, so the timing it presents with
+matters. A monitor whose range is narrower than about 2:1 (e.g. 48–75 Hz) cannot get LFC from any driver.
 
 ### Why VA panels flicker with VRR
 
