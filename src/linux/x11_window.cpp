@@ -12,6 +12,8 @@
 
 #include <vulkan/vulkan_xcb.h>
 
+#include "sysfs_edid.h"
+
 namespace vrr {
 
 X11Window::~X11Window() {
@@ -49,7 +51,7 @@ bool X11Window::init(const Config& cfg, std::string& err) {
                       static_cast<uint16_t>(height_), 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, screen_->root_visual, mask,
                       values);
 
-    const char* title = "VRR/LFC diagnostic";
+    const char* title = "Synchora - VRR flicker check";
     xcb_change_property(conn_, XCB_PROP_MODE_REPLACE, window_, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8,
                         static_cast<uint32_t>(std::strlen(title)), title);
     wmProtocols_ = atom("WM_PROTOCOLS");
@@ -177,6 +179,17 @@ void X11Window::queryDisplay() {
                                               xcb_randr_get_output_info_name_length(oi));
                     std::free(oi);
                 }
+                // The EDID output property; DDX output names do not always match the kernel's (amdgpu uses
+                // "DisplayPort-0"), so sysfs is only the fallback.
+                const xcb_randr_output_t out = xcb_randr_get_crtc_info_outputs(ci)[0];
+                xcb_randr_get_output_property_reply_t* pr = xcb_randr_get_output_property_reply(
+                    conn_, xcb_randr_get_output_property(conn_, out, atom("EDID"), XCB_ATOM_ANY, 0, 256, 0, 0), nullptr);
+                if (pr) {
+                    const uint8_t* data = xcb_randr_get_output_property_data(pr);
+                    const int len = xcb_randr_get_output_property_data_length(pr);
+                    if (pr->format == 8 && len >= 128) cached_.edid.assign(data, data + len);
+                    std::free(pr);
+                }
             }
         }
         std::free(ci);
@@ -184,6 +197,7 @@ void X11Window::queryDisplay() {
     }
     std::free(res);
 #endif
+    if (cached_.edid.empty()) cached_.edid = readSysfsEdid(cached_.outputName == "X11 screen" ? "" : cached_.outputName);
 }
 
 DisplayInfo X11Window::displayInfo() {

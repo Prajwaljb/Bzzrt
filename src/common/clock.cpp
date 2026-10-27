@@ -7,6 +7,9 @@
 #ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
 #define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
 #endif
+#elif defined(__APPLE__)
+#include <pthread.h>
+#include <time.h>
 #else
 #include <cerrno>
 #include <sys/prctl.h>
@@ -86,6 +89,29 @@ void preciseSleepUntil(int64_t targetNs) {
         } else {
             Sleep(static_cast<DWORD>(sleepNs / 1000000));
         }
+    }
+    while (nowNs() < targetNs) VRR_CPU_PAUSE();
+}
+
+#elif defined(__APPLE__)
+
+// CLOCK_UPTIME_RAW is mach_absolute_time, the domain of CACurrentMediaTime and MTLDrawable presentedTime.
+int64_t nowNs() { return static_cast<int64_t>(clock_gettime_nsec_np(CLOCK_UPTIME_RAW)); }
+
+void initTimingPrecision() { pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0); }
+
+void shutdownTimingPrecision() {}
+
+void preciseSleepUntil(int64_t targetNs) {
+    // macOS timers can wake up to ~1 ms late, so the last millisecond is spent spinning.
+    const int64_t kSpinNs = 1000000;
+    const int64_t remain = targetNs - nowNs();
+    if (remain > kSpinNs) {
+        const int64_t s = remain - kSpinNs;
+        timespec ts;
+        ts.tv_sec = static_cast<time_t>(s / 1000000000LL);
+        ts.tv_nsec = static_cast<long>(s % 1000000000LL);
+        nanosleep(&ts, nullptr);
     }
     while (nowNs() < targetNs) VRR_CPU_PAUSE();
 }

@@ -3,6 +3,7 @@
 
 #include <vulkan/vulkan.h>
 
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <deque>
@@ -34,6 +35,7 @@ public:
     bool supports10bit() const override { return has10bit_; }
     bool is10bit() const override { return want10_; }
     void set10bit(bool on) override;
+    bool canRepeatFrames() const override { return true; }
 
 private:
     static constexpr int kFrames = 2;
@@ -130,11 +132,19 @@ private:
     std::mutex pwMutex_;
     std::condition_variable pwCv_;
     std::deque<std::pair<uint64_t, uint64_t>> pwPending_;  // (present id, swapchain generation)
-    std::vector<DisplayTimingSample> pwResults_;
+    std::vector<DisplayTimingSample> pwResults_;  // frameIndex holds the present id until pollTiming maps it
     std::atomic<bool> pwStop_{false};
     uint64_t swapGen_ = 0;
 
-    uint64_t lastFrame_ = 0;
+    // Present ids must increase monotonically, but frame indices of repeated frames (kRepeatFrameBit) do not,
+    // so presents are numbered separately and mapped back to the app's frame index.
+    uint64_t presentSeq_ = 0;
+    static constexpr size_t kSeqMap = 1024;
+    std::array<std::pair<uint64_t, uint64_t>, kSeqMap> seqMap_{};  // (present id, frame index)
+    uint64_t frameForPresent(uint64_t id) const {
+        const auto& e = seqMap_[id % kSeqMap];
+        return e.first == id ? e.second : 0;
+    }
     int64_t lastTimingNs_ = 0;
     uint64_t timingSamples_ = 0;
 };

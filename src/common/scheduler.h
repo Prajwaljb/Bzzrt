@@ -12,11 +12,11 @@ namespace vrr {
 enum class TestKind { Stable, Custom, Sweep, Switch, Spikes, Drops, Jitter, Lows };
 
 struct TestDef {
-    const char* id;
-    const char* name;
-    TestKind kind;
-    double fpsA;  // stable fps / first switch rate / base rate / sweep min
-    double fpsB;  // second switch rate / sweep max
+    std::string id;
+    std::string name;
+    TestKind kind = TestKind::Stable;
+    double fpsA = 0;  // stable fps / first switch rate / base rate / sweep min
+    double fpsB = 0;  // second switch rate / sweep max
 };
 
 struct TestParams {
@@ -51,6 +51,7 @@ public:
     // intervals), so the sequence is deterministic regardless of late frames.
     double nextInterval(double elapsedSec);
     TestParams& params() { return p_; }
+    const TestParams& params() const { return p_; }
     const char* phase() const { return phase_; }
     double lastFps() const { return lastFps_; }
 

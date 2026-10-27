@@ -906,7 +906,8 @@ RenderResult VulkanBackend::renderFrame(const FrameParams& p) {
 }
 
 PresentOutcome VulkanBackend::present(uint64_t frameIndex) {
-    lastFrame_ = frameIndex;
+    const uint64_t presentId = ++presentSeq_;
+    seqMap_[presentId % kSeqMap] = {presentId, frameIndex};
     VkPresentInfoKHR pi{};
     pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     pi.waitSemaphoreCount = 1;
@@ -915,7 +916,6 @@ PresentOutcome VulkanBackend::present(uint64_t frameIndex) {
     pi.pSwapchains = &swapchain_;
     pi.pImageIndices = &imageIndex_;
 
-    const uint64_t presentId = frameIndex;  // starts at 1 and increases monotonically
     VkPresentIdKHR idInfo{};
     VkPresentTimeGOOGLE time{};
     VkPresentTimesInfoGOOGLE timesInfo{};
@@ -928,7 +928,7 @@ PresentOutcome VulkanBackend::present(uint64_t frameIndex) {
         chain = &idInfo;
     }
     if (hasDisplayTiming_) {
-        time.presentID = static_cast<uint32_t>(frameIndex);
+        time.presentID = static_cast<uint32_t>(presentId);
         time.desiredPresentTime = 0;  // present as soon as possible; pacing is done by the CPU timer
         timesInfo.sType = VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE;
         timesInfo.swapchainCount = 1;
@@ -991,7 +991,9 @@ void VulkanBackend::presentWaitLoop() {
 void VulkanBackend::pollTiming(std::vector<DisplayTimingSample>& out) {
     if (hasPresentWait_) {
         std::lock_guard<std::mutex> lk(pwMutex_);
-        if (!hasDisplayTiming_) out.insert(out.end(), pwResults_.begin(), pwResults_.end());
+        if (!hasDisplayTiming_)
+            for (const auto& r : pwResults_)
+                if (const uint64_t f = frameForPresent(r.frameIndex)) out.push_back({f, r.displayNs});
         if (!pwResults_.empty()) lastTimingNs_ = nowNs();
         timingSamples_ += pwResults_.size();
         pwResults_.clear();
@@ -1003,10 +1005,11 @@ void VulkanBackend::pollTiming(std::vector<DisplayTimingSample>& out) {
             std::vector<VkPastPresentationTimingGOOGLE> v(n);
             if (pfnPastTiming_(device_, swapchain_, &n, v.data()) == VK_SUCCESS || n > 0) {
                 for (uint32_t i = 0; i < n; ++i) {
-                    // presentID holds the low 32 bits of the frame index.
-                    uint64_t frame = (lastFrame_ & ~0xFFFFFFFFull) | v[i].presentID;
-                    if (frame > lastFrame_) frame -= 0x100000000ull;
-                    out.push_back({frame, static_cast<int64_t>(v[i].actualPresentTime)});
+                    // presentID holds the low 32 bits of the present id.
+                    uint64_t id = (presentSeq_ & ~0xFFFFFFFFull) | v[i].presentID;
+                    if (id > presentSeq_) id -= 0x100000000ull;
+                    if (const uint64_t f = frameForPresent(id))
+                        out.push_back({f, static_cast<int64_t>(v[i].actualPresentTime)});
                 }
                 lastTimingNs_ = nowNs();
                 timingSamples_ += n;

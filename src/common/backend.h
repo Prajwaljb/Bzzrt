@@ -121,6 +121,13 @@ struct DisplayInfo {
     int width = 0, height = 0;
     double refreshHz = 0.0;
     std::string extra;
+    // Raw EDID of the monitor, empty if the platform cannot read it.
+    std::vector<uint8_t> edid;
+    // A VRR range the OS reports directly (macOS), 0 = none; osRangeSource says where it came from.
+    double osVrrMinHz = 0.0, osVrrMaxHz = 0.0;
+    std::string osRangeSource;
+    // Identity for remembering this monitor's range when there is no EDID (e.g. macOS vendor/model/serial).
+    std::string monitorKey;
 };
 
 class Platform {
@@ -137,6 +144,8 @@ public:
     // ceiling drops to hz and the driver cannot hide low frame rates by repeating frames.
     // hz = 0 restores the normal mode. Returns false if unsupported or the switch failed.
     virtual bool canLimitRefresh() const { return false; }
+    // Refresh rates the output offers at the current resolution (for picking the low-refresh ceiling).
+    virtual std::vector<double> availableRefreshRates() { return {}; }
     virtual bool setRefreshCeiling(double hz) {
         (void)hz;
         return false;

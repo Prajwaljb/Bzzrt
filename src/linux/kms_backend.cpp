@@ -258,6 +258,7 @@ bool KmsBackend::setup(const Config& cfg, std::string& err) {
     if (propId(connId_, DRM_MODE_OBJECT_CONNECTOR, "EDID", &edidBlob) && edidBlob) {
         if (drmModePropertyBlobRes* b = drmModeGetPropertyBlob(fd_, static_cast<uint32_t>(edidBlob))) {
             const auto* d = static_cast<const uint8_t*>(b->data);
+            edid_.assign(d, d + b->length);
             if (b->length >= 128) {
                 for (int off : {54, 72, 90, 108}) {
                     const uint8_t* q = d + off;
@@ -658,6 +659,7 @@ DisplayInfo KmsBackend::displayInfo() {
     d.extra = std::string("vrr_capable=") + (vrrCapable_ ? "1" : "0") + "  VRR_ENABLED=" +
               (pCrtcVrr_ ? (vrrActive_ ? "1" : "0") : "n/a") + "  max bpc=" + std::to_string(maxBpc_);
     if (!edidRange_.empty()) d.extra += "  " + edidRange_;
+    d.edid = edid_;
     return d;
 }
 

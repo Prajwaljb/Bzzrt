@@ -8,19 +8,21 @@ namespace vrr {
 
 void printUsage(const char* argv0) {
     std::printf(
-        "VRR/LFC diagnostic - controlled presentation timing for Adaptive-Sync testing\n\n"
+        "Synchora %s - VRR / FreeSync / G-SYNC / Adaptive-Sync flicker and LFC diagnostic\n\n"
         "Usage: %s [options]\n\n"
         "Backend\n"
-#ifdef _WIN32
+#if defined(_WIN32)
         "  --api d3d12|d3d11          Graphics API (default d3d12, falls back to d3d11)\n"
+#elif defined(__APPLE__)
+        "  --api metal                Graphics API (Metal, the only one on macOS)\n"
 #else
         "  --api vulkan|kms           vulkan = Vulkan WSI under a compositor (default)\n"
         "                             kms    = direct DRM/KMS page flips from a text console\n"
         "  --wsi auto|wayland|x11     Vulkan window system (default auto)\n"
         "  --kms-device /dev/dri/cardN   --kms-connector DP-2   --kms-mode 2560x1440@200\n"
-        "  --double-frames            Experiment (kms only): the app shows frames below the VRR minimum\n"
-        "                             twice at even intervals, as a driver with LFC would\n"
 #endif
+        "  --double-frames            Experiment: the app itself shows frames below the LFC threshold\n"
+        "                             several times at even intervals, as a driver with LFC would\n"
         "  --gpu N                    GPU / adapter index (default: first usable)\n"
         "  --present ID               Present mode id (see overlay; e.g. fifo, mailbox, immediate,\n"
         "                             vsync, tearing, nosync, vrr, fixed, async)\n"
@@ -44,7 +46,10 @@ void printUsage(const char* argv0) {
         "  --exit-after               Quit when the test finishes\n"
         "  --seed N                   Random seed for jitter tests (default 1)\n"
         "  --idle-fps F               Rate used while no test runs (default 100)\n"
-        "  --vrr-min HZ --vrr-max HZ  Monitor VRR range for statistics (default 48 / 200)\n"
+        "  --vrr-min HZ --vrr-max HZ  Monitor VRR range (default: read from the monitor's EDID / the OS;\n"
+        "                             if it cannot be read, the check asks for it and remembers it)\n"
+        "  --lfc-threshold FPS        Frame rate below which frames are expected to be shown several\n"
+        "                             times (default: 1.1 x the VRR minimum)\n"
         "  --switch-period S          Time at each rate in switch tests (default 1.0)\n"
         "  --sweep-period S           Sweep cycle length (default 10)\n"
         "  --spike-rate HZ            Spikes per second (default 0.5)\n"
@@ -62,13 +67,13 @@ void printUsage(const char* argv0) {
         "Logging\n"
         "  --no-log                   Do not write CSV logs\n"
         "  --log-dir DIR              Directory for CSV logs (default .)\n\n"
-        "  --list-tests  --help\n",
-        argv0);
+        "  --list-tests  --version  --help\n",
+        kVersion, argv0);
 }
 
 void printTests() {
     std::printf("Available tests (--test ID):\n");
-    for (const auto& t : allTests()) std::printf("  %-14s %s\n", t.id, t.name);
+    for (const auto& t : allTests()) std::printf("  %-14s %s\n", t.id.c_str(), t.name.c_str());
 }
 
 static bool parseSize(const char* s, int& w, int& h) { return std::sscanf(s, "%dx%d", &w, &h) == 2 && w > 0 && h > 0; }
@@ -104,6 +109,7 @@ bool parseArgs(int argc, char** argv, Config& c, std::string& err) {
         double d = 0;
         if (a == "--help" || a == "-h") c.help = true;
         else if (a == "--list-tests") c.listTests = true;
+        else if (a == "--version" || a == "-V") c.version = true;
         else if (a == "--api") { if (!str(c.api)) return false; }
         else if (a == "--wsi") { if (!str(c.wsi)) return false; }
         else if (a == "--gpu") { if (!num(d)) return false; c.gpuIndex = static_cast<int>(d); }
@@ -130,6 +136,7 @@ bool parseArgs(int argc, char** argv, Config& c, std::string& err) {
         else if (a == "--idle-fps") { if (!num(c.idleFps)) return false; }
         else if (a == "--vrr-min") { if (!num(c.vrrMinHz)) return false; }
         else if (a == "--vrr-max") { if (!num(c.vrrMaxHz)) return false; }
+        else if (a == "--lfc-threshold") { if (!num(c.lfcFps)) return false; }
         else if (a == "--switch-period") { if (!num(c.params.switchPeriodSec)) return false; }
         else if (a == "--sweep-period") { if (!num(c.params.sweepPeriodSec)) return false; }
         else if (a == "--spike-rate") { if (!num(c.params.spikeRateHz)) return false; }
@@ -162,7 +169,10 @@ bool parseArgs(int argc, char** argv, Config& c, std::string& err) {
     }
     if (findTest(c.test) < 0) return err = "unknown test id: " + c.test + " (see --list-tests)", false;
     if (c.pattern < 0 || c.pattern >= kPatCount) return err = "bad --pattern", false;
-    if (c.vrrMinHz <= 0 || c.vrrMaxHz <= c.vrrMinHz) return err = "bad VRR range", false;
+    if (c.vrrMinHz < 0 || c.vrrMaxHz < 0 || c.vrrMinHz > 1000 || c.vrrMaxHz > 1000 ||
+        (c.vrrMinHz > 0 && c.vrrMaxHz > 0 && c.vrrMaxHz <= c.vrrMinHz))
+        return err = "bad VRR range (--vrr-min must be below --vrr-max)", false;
+    if (c.lfcFps < 0 || c.lfcFps > 1000) return err = "bad --lfc-threshold", false;
     if (c.idleFps <= 0) return err = "bad --idle-fps", false;
     if (c.params.customFps <= 0 || c.params.lowsAvgFps <= 0 || c.params.lowsFps <= 0)
         return err = "FPS values must be positive", false;

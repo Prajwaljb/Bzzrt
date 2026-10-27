@@ -33,6 +33,7 @@ public:
     bool supports10bit() const override { return true; }
     bool is10bit() const override { return want10_; }
     void set10bit(bool on) override { want10_ = on; }
+    bool canRepeatFrames() const override { return true; }
 
     // Enters/leaves DXGI exclusive fullscreen at the desktop's current refresh rate.
     bool setExclusiveFullscreen(bool on);

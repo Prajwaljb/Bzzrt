@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "sysfs_edid.h"
 #include "xdg-shell-client-protocol.h"
 #ifdef VRRDIAG_HAVE_CONTENT_TYPE
 #include "content-type-v1-client-protocol.h"
@@ -214,7 +215,7 @@ bool WaylandWindow::init(const Config& cfg, std::string& err) {
     xdg_surface_add_listener(xdgSurface_, &kXdgSurfaceListener, this);
     toplevel_ = xdg_surface_get_toplevel(xdgSurface_);
     xdg_toplevel_add_listener(toplevel_, &kToplevelListener, this);
-    xdg_toplevel_set_title(toplevel_, "VRR/LFC diagnostic");
+    xdg_toplevel_set_title(toplevel_, "Synchora - VRR flicker check");
     xdg_toplevel_set_app_id(toplevel_, "vrrdiag");
     if (mode_ == WindowMode::Borderless) xdg_toplevel_set_fullscreen(toplevel_, nullptr);
 #ifdef VRRDIAG_HAVE_CONTENT_TYPE
@@ -265,6 +266,14 @@ DisplayInfo WaylandWindow::displayInfo() {
         d.height = o->height;
         d.refreshHz = o->refreshMhz / 1000.0;
     }
+    // wl_output names match the kernel's connector names on the common compositors (KWin, Mutter, wlroots).
+    const std::string conn = o ? o->name : std::string();
+    if (!edidRead_ || conn != edidConnector_) {
+        edid_ = readSysfsEdid(conn);
+        edidConnector_ = conn;
+        edidRead_ = true;
+    }
+    d.edid = edid_;
     d.extra = "Wayland reports the nominal mode only; no protocol reports VRR state.";
     if (contentType_) d.extra += " content-type=game set.";
     return d;

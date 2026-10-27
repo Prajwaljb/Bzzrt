@@ -8,7 +8,9 @@
 #include <ctime>
 
 #include "clock.h"
+#include "edid.h"
 #include "patterns.h"
+#include "range_store.h"
 
 namespace vrr {
 
@@ -25,7 +27,6 @@ std::string fmt(const char* f, ...) {
 
 const double kDurations[] = {0, 10, 30, 60, 120, 300, 600};
 constexpr int64_t kStepMinNs = 10000000000LL;
-constexpr double kLowRefreshHz = 60.0;
 
 constexpr uint32_t kWhite = rgba8(235, 235, 235);
 constexpr uint32_t kGray = rgba8(160, 160, 160);
@@ -81,6 +82,8 @@ App::App(const Config& cfg, Platform& platform, Backend& backend)
     : cfg_(cfg), platform_(platform), backend_(backend) {
     params_ = cfg.params;
     testIdx_ = std::max(0, findTest(cfg.test));
+    curDef_ = allTests()[testIdx_];
+    rangeAnyFromCli_ = cfg.vrrMinHz > 0 || cfg.vrrMaxHz > 0;
     duration_ = cfg.durationSec;
     logging_ = cfg.log;
     pattern_ = cfg.pattern;
@@ -94,9 +97,74 @@ App::App(const Config& cfg, Platform& platform, Backend& backend)
 
 int App::repeatMultiple(double intervalSec) const {
     if (!doubling_) return 1;
-    // Enough repeats to keep every refresh about 10% above the panel's minimum, never faster than its maximum.
-    const int m = static_cast<int>(std::ceil(intervalSec * cfg_.vrrMinHz * 1.1));
-    return std::max(1, std::min(m, static_cast<int>(std::floor(intervalSec * cfg_.vrrMaxHz))));
+    // Enough repeats to keep every refresh above the LFC threshold, never faster than the panel's maximum.
+    const int m = static_cast<int>(std::ceil(intervalSec * lfcThreshold()));
+    return std::max(1, std::min(m, static_cast<int>(std::floor(intervalSec * rangeMax()))));
+}
+
+double App::rangeMin() const { return rangeKnown() ? vrrMin_ : 48.0; }
+
+double App::rangeMax() const {
+    if (lowHz_ > 0) return lowHz_;
+    double m = rangeKnown() ? vrrMax_ : (dinfo_.refreshHz > 0 ? dinfo_.refreshHz : 144.0);
+    if (dinfo_.refreshHz > rangeMin()) m = std::min(m, dinfo_.refreshHz);
+    return m;
+}
+
+double App::lfcThreshold() const {
+    if (lfcFps_ > 0) return lfcFps_;
+    return std::min(rangeMin() * 1.1, rangeMax() / 2);
+}
+
+bool App::modeLimited() const {
+    return rangeKnown() && lowHz_ == 0 && dinfo_.refreshHz > vrrMin_ && dinfo_.refreshHz < vrrMax_ - 1;
+}
+
+void App::rebuildSteps() {
+    steps_ = guidedSteps(rangeMin(), rangeMax(), lowHz_);
+    guidedSignature_.clear();
+}
+
+void App::resolveRange(bool force) {
+    const EdidInfo e = parseEdid(dinfo_.edid);
+    std::string key = !dinfo_.monitorKey.empty() ? dinfo_.monitorKey : edidMonitorKey(e);
+    if (key.empty()) {
+        key = "name:" + (!dinfo_.monitorName.empty() ? dinfo_.monitorName : dinfo_.outputName);
+        for (char& c : key)
+            if (c == ' ' || c == '\t') c = '_';
+    }
+    if (rangeResolved_ && key == rangeKey_ && !force) return;
+    rangeResolved_ = true;
+    rangeKey_ = key;
+
+    double dMin = 0, dMax = 0;
+    std::string dSrc;
+    if (dinfo_.osVrrMinHz > 0 && dinfo_.osVrrMaxHz > dinfo_.osVrrMinHz) {
+        dMin = dinfo_.osVrrMinHz;
+        dMax = dinfo_.osVrrMaxHz;
+        dSrc = dinfo_.osRangeSource;
+    } else {
+        edidVrrRange(e, dMin, dMax, dSrc);
+    }
+    SavedRange saved;
+    const bool haveSaved = loadRange(key, saved);
+    vrrMin_ = cfg_.vrrMinHz > 0 ? cfg_.vrrMinHz : haveSaved ? saved.minHz : dMin;
+    vrrMax_ = cfg_.vrrMaxHz > 0 ? cfg_.vrrMaxHz : haveSaved ? saved.maxHz : dMax;
+    lfcFps_ = cfg_.lfcFps > 0 ? cfg_.lfcFps : haveSaved ? saved.lfcFps : 0;
+    if (cfg_.vrrMinHz > 0 && cfg_.vrrMaxHz > 0) rangeSource_ = "command line";
+    else if (haveSaved && !rangeAnyFromCli_) rangeSource_ = "entered by you";
+    else if (rangeAnyFromCli_) rangeSource_ = "command line + " + (haveSaved ? std::string("entered by you") : dSrc);
+    else rangeSource_ = dSrc;
+    if (!rangeKnown()) {
+        vrrMin_ = vrrMax_ = 0;
+        rangeSource_.clear();
+    }
+    rebuildSteps();
+    if (rangeKnown())
+        std::printf("VRR range: %.0f-%.0f Hz (%s), monitor key %s\n", vrrMin_, vrrMax_, rangeSource_.c_str(), key.c_str());
+    else
+        std::printf("VRR range: unknown for %s; the check will ask for it\n", key.c_str());
+    std::fflush(stdout);
 }
 
 void App::flash(const std::string& msg) {
@@ -106,11 +174,18 @@ void App::flash(const std::string& msg) {
     std::fflush(stdout);
 }
 
-std::string App::testLabel() const { return describeTest(allTests()[testIdx_], params_); }
+// While a test runs its own parameters apply (guided steps override the jitter range).
+std::string App::testLabel() const { return describeTest(curDef_, running_ ? sched_.params() : params_); }
 
 void App::refreshInfo() {
     binfo_ = backend_.info();
+    const double oldRefresh = dinfo_.refreshHz;
     dinfo_ = platform_.displayInfo();
+    // A different monitor (window moved) gets its own range; a mode change reshapes the steps.
+    if (mode_ != Mode::Step && !running_) {
+        resolveRange();
+        if (std::fabs(oldRefresh - dinfo_.refreshHz) > 0.5) rebuildSteps();
+    }
 }
 
 void App::refreshLogState() {
@@ -144,7 +219,9 @@ std::vector<std::string> App::headerLines() const {
     h.push_back("timing_source: " + (binfo_.timingAvailable ? binfo_.timingSource : std::string("none")));
     h.push_back("test: " + testLabel());
     h.push_back(fmt("seed: %llu", static_cast<unsigned long long>(params_.seed)));
-    h.push_back(fmt("vrr_range_assumed: %.1f-%.1f Hz", cfg_.vrrMinHz, cfg_.vrrMaxHz));
+    h.push_back(rangeKnown() ? fmt("vrr_range: %.1f-%.1f Hz (%s), effective max %.1f Hz, lfc_threshold %.1f FPS",
+                                   vrrMin_, vrrMax_, rangeSource_.c_str(), rangeMax(), lfcThreshold())
+                             : fmt("vrr_range: unknown (statistics assume %.0f-%.0f Hz)", rangeMin(), rangeMax()));
     h.push_back(std::string("pattern: ") + patternName(pattern_));
     for (const auto& n : binfo_.notes) h.push_back("note: " + n);
     h.push_back("time_s/host_monotonic_ns: CPU time when Present/flip was called. actual_frametime_ms: interval "
@@ -164,7 +241,7 @@ std::vector<std::string> App::summaryLines() const {
                     st.percentileMs(99.9)));
     s.push_back(fmt("largest spike %.3f ms (frame %llu)  late %llu  below %.0f Hz floor %llu  floor crossings %llu",
                     st.maxMs(), static_cast<unsigned long long>(st.maxFrame()),
-                    static_cast<unsigned long long>(st.lateFrames()), cfg_.vrrMinHz,
+                    static_cast<unsigned long long>(st.lateFrames()), rangeMin(),
                     static_cast<unsigned long long>(st.belowFloor()),
                     static_cast<unsigned long long>(st.floorCrossings())));
     s.push_back(fmt("present call avg %.3f ms max %.3f ms", st.presentCallAvgMs(), st.presentCallMaxMs()));
@@ -181,6 +258,7 @@ std::vector<std::string> App::summaryLines() const {
 void App::selectTest(int index) {
     const int n = static_cast<int>(allTests().size());
     testIdx_ = ((index % n) + n) % n;
+    curDef_ = allTests()[testIdx_];
     if (running_) {
         stopTest("test changed");
         startTest(nowNs(), params_);
@@ -188,8 +266,8 @@ void App::selectTest(int index) {
 }
 
 void App::startTest(int64_t now, const TestParams& p) {
-    sched_.start(allTests()[testIdx_], p);
-    stats_.reset(cfg_.vrrMinHz, cfg_.vrrMaxHz);
+    sched_.start(curDef_, p);
+    stats_.reset(rangeMin(), rangeMax());
     running_ = true;
     haveResults_ = true;
     testStartNs_ = now;
@@ -200,7 +278,7 @@ void App::startTest(int64_t now, const TestParams& p) {
     refreshInfo();
     lastLogPath_.clear();
     if (logging_) {
-        std::string id = logId_.empty() ? allTests()[testIdx_].id : logId_;
+        std::string id = logId_.empty() ? curDef_.id : logId_;
         std::string path =
             cfg_.logDir + "/vrrlog_" + wallClockStamp("%Y%m%d-%H%M%S") + "_" + logPrefix_ + id + ".csv";
         if (log_.open(path, headerLines(), now)) {
@@ -232,7 +310,10 @@ void App::handleKey(const KeyEvent& k) {
     switch (k.key) {
         case Key::Escape:
         case Key::Q: quit_ = true; break;
-        case Key::Tab: leaveGuided(Mode::Intro); break;
+        case Key::Tab:
+            leaveGuided(Mode::Intro);
+            rebuildSteps();
+            break;
         case Key::Space:
             if (running_) stopTest("stopped by user");
             else startTest(nowNs(), params_);
@@ -352,7 +433,7 @@ void App::buildOverlay(int64_t now) {
     } else {
         state = fmt("IDLE @ %.0f FPS - SPACE starts test", cfg_.idleFps);
     }
-    add("VRR/LFC DIAGNOSTIC   [" + state + "]", running_ ? kGreen : kYellow);
+    add("SYNCHORA VRR/LFC DIAGNOSTIC   [" + state + "]", running_ ? kGreen : kYellow);
     add("API: " + binfo_.api + "   (" + platform_.name() + ")", kCyan);
     add("GPU: " + binfo_.gpu, kCyan);
     {
@@ -391,8 +472,8 @@ void App::buildOverlay(int64_t now) {
             static_cast<unsigned long long>(st.frames())));
     {
         const double pct = st.frames() ? 100.0 * static_cast<double>(st.belowFloor()) / st.frames() : 0.0;
-        add(fmt("Below %.0f Hz VRR floor (>%.2f ms): %llu (%.1f%%)   floor crossings: %llu", cfg_.vrrMinHz,
-                1000.0 / cfg_.vrrMinHz, static_cast<unsigned long long>(st.belowFloor()), pct,
+        add(fmt("Below %.0f Hz VRR floor (>%.2f ms): %llu (%.1f%%)   floor crossings: %llu", rangeMin(),
+                1000.0 / rangeMin(), static_cast<unsigned long long>(st.belowFloor()), pct,
                 static_cast<unsigned long long>(st.floorCrossings())),
             st.belowFloor() ? kRed : kWhite);
     }
@@ -444,8 +525,8 @@ void App::buildOverlay(int64_t now) {
         if (!hist[i]) continue;
         const double centerMs = (i + 0.5) * FrameStats::kHistBinMs;
         uint32_t c = kGreen;
-        if (i == FrameStats::kHistBins || centerMs > 1000.0 / cfg_.vrrMinHz) c = kRed;
-        else if (centerMs < 1000.0 / cfg_.vrrMaxHz) c = kYellow;
+        if (i == FrameStats::kHistBins || centerMs > 1000.0 / rangeMin()) c = kRed;
+        else if (centerMs < 1000.0 / rangeMax()) c = kYellow;
         const int h = std::max(1, static_cast<int>(histH * std::log10(1.0 + static_cast<double>(hist[i])) / lmax));
         overlay_.fillRect(pad + i * barW, histTop + histH - h, barW - (scale > 1 ? 1 : 0), h, c);
     }
@@ -453,14 +534,18 @@ void App::buildOverlay(int64_t now) {
         const int x = pad + static_cast<int>(ms / FrameStats::kHistBinMs * barW);
         overlay_.fillRect(x, histTop, scale, histH, c);
     };
-    marker(1000.0 / cfg_.vrrMaxHz, kYellow);
-    marker(1000.0 / cfg_.vrrMinHz, kRed);
+    marker(1000.0 / rangeMax(), kYellow);
+    marker(1000.0 / rangeMin(), kRed);
     const int histRight = pad + (FrameStats::kHistBins + 1) * barW + 4 * scale;
     overlay_.text(histRight, histTop, "present interval histogram", kGray, scale);
     overlay_.text(histRight, histTop + lh, "0-50 ms, 0.5 ms bins, log scale", kGray, scale);
-    overlay_.text(histRight, histTop + 2 * lh, fmt("yellow: < %.2f ms (> %.0f Hz)", 1000.0 / cfg_.vrrMaxHz, cfg_.vrrMaxHz),
+    overlay_.text(histRight, histTop + 2 * lh, fmt("yellow: < %.2f ms (> %.0f Hz)", 1000.0 / rangeMax(), rangeMax()),
                   kYellow, scale);
-    overlay_.text(histRight, histTop + 3 * lh, fmt("red: > %.2f ms (LFC zone)", 1000.0 / cfg_.vrrMinHz), kRed, scale);
+    overlay_.text(histRight, histTop + 3 * lh, fmt("red: > %.2f ms (LFC zone)", 1000.0 / rangeMin()), kRed, scale);
+    overlay_.text(histRight, histTop + 4 * lh,
+                  rangeKnown() ? fmt("VRR range %.0f-%.0f Hz (%s)", vrrMin_, vrrMax_, rangeSource_.c_str())
+                               : std::string("VRR range unknown: TAB, then R to set it"),
+                  rangeKnown() ? kGray : kYellow, scale);
     overlay_.text(pad, histLabelY, "0", kGray, scale);
     overlay_.text(pad + 50 * barW, histLabelY, "25", kGray, scale);
     overlay_.text(pad + 96 * barW, histLabelY, "50+", kGray, scale);
@@ -475,7 +560,87 @@ void App::buildOverlay(int64_t now) {
 
 // ------------------------------------------------------------------ guided check
 
+void App::requestStart() {
+    if (!rangeKnown()) {
+        beginRangeEdit(true);
+        return;
+    }
+    results_.clear();
+    reportPath_.clear();
+    startStep(0);
+}
+
+void App::beginRangeEdit(bool thenStart) {
+    editField_ = 1;
+    startAfterEdit_ = thenStart;
+    editMin_ = rangeKnown() ? fmt("%.0f", vrrMin_) : std::string();
+    editMax_ = rangeKnown() ? fmt("%.0f", vrrMax_) : std::string();
+    editLfc_ = lfcFps_ > 0 ? fmt("%.0f", lfcFps_) : std::string();
+    editError_.clear();
+    guidedSignature_.clear();
+}
+
+void App::handleRangeKey(const KeyEvent& k) {
+    std::string& field = editField_ == 1 ? editMin_ : editField_ == 2 ? editMax_ : editLfc_;
+    editError_.clear();
+    if (k.key == Key::Escape) {
+        editField_ = 0;
+        startAfterEdit_ = false;
+    } else if (k.key == Key::Backspace) {
+        if (!field.empty()) field.pop_back();
+        else if (editField_ > 1) --editField_;
+    } else if (keyDigit(k.key) >= 0) {
+        if (field.size() < 3) field += static_cast<char>('0' + keyDigit(k.key));
+    } else if (k.key == Key::Enter || k.key == Key::Space || k.key == Key::Tab) {
+        const double mn = std::atof(editMin_.c_str()), mx = std::atof(editMax_.c_str());
+        const double lfc = std::atof(editLfc_.c_str());
+        if (editField_ == 1) {
+            if (mn < 10 || mn > 500) editError_ = "Enter the lowest refresh rate of the VRR range, e.g. 48.";
+            else editField_ = 2;
+        } else if (editField_ == 2) {
+            if (mx < mn + 5 || mx > 1000)
+                editError_ = fmt("The maximum must be above the minimum (%.0f Hz), e.g. 144.", mn);
+            else if (lfcPossible(mn, mx)) editField_ = 3;
+            else editLfc_.clear(), editField_ = 4;
+        } else if (editField_ == 3 && !editLfc_.empty() && (lfc < mn || lfc > mx / 2)) {
+            editError_ = fmt("The threshold must be between %.0f and %.0f FPS (half the maximum); empty = automatic.",
+                             mn, std::floor(mx / 2));
+        } else {
+            editField_ = 4;
+        }
+        if (editField_ == 4) {
+            editField_ = 0;
+            cfg_.vrrMinHz = cfg_.vrrMaxHz = cfg_.lfcFps = 0;  // the user's entry replaces command-line values
+            rangeAnyFromCli_ = false;
+            SavedRange r{mn, mx, editLfc_.empty() ? 0.0 : lfc};
+            const std::string path = saveRange(rangeKey_, r);
+            vrrMin_ = mn;
+            vrrMax_ = mx;
+            lfcFps_ = r.lfcFps;
+            rangeSource_ = "entered by you";
+            rangeNote_ = path.empty() ? "Range set for this session (it could not be saved)."
+                                      : "Range saved for this monitor in " + path;
+            lowStatus_.clear();
+            rebuildSteps();
+            results_.clear();
+            if (mode_ == Mode::Results) mode_ = Mode::Intro;
+            std::printf("VRR range set: %.0f-%.0f Hz, LFC threshold %s\n", mn, mx,
+                        r.lfcFps > 0 ? fmt("%.0f FPS", r.lfcFps).c_str() : "automatic");
+            std::fflush(stdout);
+            if (startAfterEdit_) {
+                startAfterEdit_ = false;
+                requestStart();
+            }
+        }
+    }
+    guidedSignature_.clear();
+}
+
 void App::handleGuidedKey(const KeyEvent& k) {
+    if (editField_ > 0) {
+        handleRangeKey(k);
+        return;
+    }
     switch (k.key) {
         case Key::Q: quit_ = true; break;
         case Key::Escape:
@@ -483,29 +648,47 @@ void App::handleGuidedKey(const KeyEvent& k) {
             else quit_ = true;
             break;
         case Key::Tab: leaveGuided(Mode::Advanced); break;
+        case Key::R:
+            if (mode_ != Mode::Step) beginRangeEdit(false);
+            break;
         case Key::L:
             if (mode_ == Mode::Step || !platform_.canLimitRefresh()) break;
             if (lowHz_ > 0) {
                 platform_.setRefreshCeiling(0);
                 platform_.setWindowMode(WindowMode::Borderless);
                 lowHz_ = 0;
-            } else if (platform_.setRefreshCeiling(kLowRefreshHz)) {
-                lowHz_ = kLowRefreshHz;
                 lowStatus_.clear();
+            } else if (!rangeKnown()) {
+                lowStatus_ = "Set the monitor's VRR range first (R).";
             } else {
-                lowStatus_ = "Could not switch to a 60 Hz exclusive fullscreen mode on this system.";
+                const double want = pickRefreshCeiling(vrrMin_, platform_.availableRefreshRates());
+                if (want <= 0) {
+                    lowStatus_ = fmt("The low-refresh test needs a display mode between %.0f and %.0f Hz at this "
+                                     "resolution; this display offers none.",
+                                     std::ceil(vrrMin_ * 1.1), std::floor(vrrMin_ * 2 - 1));
+                } else if (platform_.setRefreshCeiling(want)) {
+                    dinfo_ = platform_.displayInfo();
+                    const double got = dinfo_.refreshHz > 0 ? dinfo_.refreshHz : want;
+                    if (got < vrrMin_ * 1.05 || got > vrrMin_ * 2 - 0.5) {
+                        platform_.setRefreshCeiling(0);
+                        platform_.setWindowMode(WindowMode::Borderless);
+                        lowStatus_ = fmt("Asked for a %.0f Hz mode but the display runs at %.0f Hz.", want, got);
+                    } else {
+                        lowHz_ = got;
+                        lowStatus_.clear();
+                    }
+                } else {
+                    lowStatus_ = fmt("Could not switch to a %.0f Hz exclusive fullscreen mode on this system.", want);
+                }
             }
             // The step list differs between the two variants, so earlier results no longer apply.
+            rebuildSteps();
             results_.clear();
             mode_ = Mode::Intro;
             break;
         case Key::Enter:
         case Key::Space:
-            if (mode_ != Mode::Step) {
-                results_.clear();
-                reportPath_.clear();
-                startStep(0);
-            }
+            if (mode_ != Mode::Step) requestStart();
             break;
         case Key::Y:
         case Key::N:
@@ -516,7 +699,7 @@ void App::handleGuidedKey(const KeyEvent& k) {
             }
             break;
         case Key::Fullscreen: {
-            if (lowHz_ > 0) break;  // the low-refresh test needs its exclusive 60 Hz mode
+            if (lowHz_ > 0) break;  // the low-refresh test needs its exclusive low-refresh mode
             // Cycles windowed -> borderless -> exclusive (Windows) -> windowed.
             const auto modes = platform_.supportedWindowModes();
             auto it = std::find(modes.begin(), modes.end(), platform_.windowMode());
@@ -531,8 +714,7 @@ void App::handleGuidedKey(const KeyEvent& k) {
             if (mode_ == Mode::Step && !osdInput_.empty()) osdInput_.pop_back();
             break;
         default:
-            if (mode_ == Mode::Step && keyDigit(k.key) >= 0 && osdInput_.size() < 3 &&
-                !guidedSteps(lowHz_ > 0)[stepIdx_].changing) {
+            if (mode_ == Mode::Step && keyDigit(k.key) >= 0 && osdInput_.size() < 3 && !steps_[stepIdx_].changing) {
                 osdInput_ += static_cast<char>('0' + keyDigit(k.key));
                 // Typing after answering keeps the step open a little longer.
                 if (answer_ != Answer::None) answerNs_ = nowNs();
@@ -542,7 +724,8 @@ void App::handleGuidedKey(const KeyEvent& k) {
 }
 
 void App::startStep(int index) {
-    const GuidedStep& step = guidedSteps(lowHz_ > 0)[index];
+    if (steps_.empty()) return;
+    const GuidedStep& step = steps_[index];
     if (running_) stopTest("completed");
     mode_ = Mode::Step;
     stepIdx_ = index;
@@ -550,14 +733,14 @@ void App::startStep(int index) {
     osdInput_.clear();
     stepSamples_.clear();
     stepRepeats_ = stepRepeatsOk_ = 0;
-    testIdx_ = findTest(step.testId);
+    curDef_ = step.test;
     TestParams p = params_;
     if (step.jitterMax > 0) {
         p.jitterMinFps = step.jitterMin;
         p.jitterMaxFps = step.jitterMax;
     }
     logPrefix_ = fmt("check%d_", index + 1);
-    if (step.jitterMax > 0) logId_ = fmt("jitter%.0f-%.0f", step.jitterMin, step.jitterMax);
+    logId_ = step.logId;
     stepStartNs_ = nowNs();
     startTest(stepStartNs_, p);
     logPrefix_.clear();
@@ -569,8 +752,7 @@ void App::finishStep() {
     StepResult r;
     r.verdict = analyzeTiming(stepSamples_, dinfo_.refreshHz);
     r.answer = answer_;
-    const TestDef& def = allTests()[testIdx_];
-    r.targetFps = def.kind == TestKind::Stable ? def.fpsA : 0.0;
+    r.targetFps = curDef_.kind == TestKind::Stable ? curDef_.fpsA : 0.0;
     r.osdHz = osdInput_.empty() ? 0 : std::atoi(osdInput_.c_str());
     r.latePct = stats_.frames() ? 100.0 * static_cast<double>(stats_.lateFrames()) / stats_.frames() : 0.0;
     if (r.latePct > kAppLateLimitPct) r.verdict.timing = Timing::AppLate;
@@ -580,7 +762,7 @@ void App::finishStep() {
     r.repeatOkPct = stepRepeats_ ? 100.0 * stepRepeatsOk_ / stepRepeats_ : 0.0;
     stopTest("completed");
     results_.push_back(r);
-    if (stepIdx_ + 1 < static_cast<int>(guidedSteps(lowHz_ > 0).size())) {
+    if (stepIdx_ + 1 < static_cast<int>(steps_.size())) {
         startStep(stepIdx_ + 1);
     } else {
         mode_ = Mode::Results;
@@ -596,25 +778,42 @@ void App::leaveGuided(Mode to) {
     mode_ = to;
 }
 
+CheckContext App::checkContext() const {
+    CheckContext c;
+    c.vrrMinHz = rangeMin();
+    c.vrrMaxHz = rangeMax();
+    c.monitorMaxHz = vrrMax_;
+    c.refreshHz = dinfo_.refreshHz;
+    c.lowRefresh = lowHz_ > 0;
+    c.doubling = doubling_;
+    return c;
+}
+
 void App::writeReport() {
-    const auto& steps = guidedSteps(lowHz_ > 0);
+    const auto& steps = steps_;
     std::vector<std::string> lines;
-    lines.push_back("VRR flicker check - " + wallClockStamp("%Y-%m-%d %H:%M:%S"));
+    lines.push_back(std::string("Synchora ") + kVersion + " VRR flicker check - " + wallClockStamp("%Y-%m-%d %H:%M:%S"));
     lines.push_back("System: " + binfo_.api + " (" + platform_.name() + "), GPU: " + binfo_.gpu);
     lines.push_back("Output: " + dinfo_.outputName + " " + dinfo_.monitorName + " " + displayModeString(dinfo_));
-    lines.push_back(fmt("VRR range assumed: %.0f-%.0f Hz   Window: %s", cfg_.vrrMinHz,
-                        lowHz_ > 0 ? lowHz_ : cfg_.vrrMaxHz, windowModeName(platform_.windowMode())));
+    lines.push_back(fmt("VRR range: %.0f-%.0f Hz (%s)   Window: %s", vrrMin_, vrrMax_, rangeSource_.c_str(),
+                        windowModeName(platform_.windowMode())));
+    lines.push_back(fmt("Tested range: %.0f-%.0f Hz   LFC possible: %s   LFC threshold: %.0f FPS", rangeMin(),
+                        rangeMax(), lfcPossible(rangeMin(), rangeMax()) ? "yes" : "no (max < 2 x min)",
+                        lfcThreshold()));
+    if (modeLimited())
+        lines.push_back(fmt("NOTE: the display mode runs at %.0f Hz, below the monitor's %.0f Hz maximum", dinfo_.refreshHz,
+                            vrrMax_));
     if (lowHz_ > 0)
         lines.push_back(fmt("LOW-REFRESH TEST: %.0f Hz display mode, frames cannot be repeated by the driver", lowHz_));
     if (doubling_)
         lines.push_back(fmt("FRAME DOUBLING EXPERIMENT: frames slower than %.0f FPS were shown several times by this "
                             "app at even intervals, as a driver with LFC would do it",
-                            cfg_.vrrMinHz * 1.1));
+                            lfcThreshold()));
     lines.push_back("Timing source: " + (binfo_.timingAvailable ? binfo_.timingSource : std::string("none")));
     lines.push_back("");
     for (size_t i = 0; i < results_.size(); ++i) {
         const auto& r = results_[i];
-        lines.push_back(fmt("%d. %-26s timing %-14s you: %s", static_cast<int>(i + 1), steps[i].title,
+        lines.push_back(fmt("%d. %-26s timing %-14s you: %s", static_cast<int>(i + 1), steps[i].title.c_str(),
                             timingLabel(r.verdict.timing), answerLabel(r.answer)));
         lines.push_back("   " + timingSentence(steps[i], r) +
                         fmt(" [%d intervals, %.0f%% on time]", r.verdict.samples, r.verdict.onTimePct));
@@ -624,13 +823,12 @@ void App::writeReport() {
             lines.push_back(fmt("   App frame doubling: %s%d repeat refreshes, %.0f%% at the requested time.", how.c_str(),
                                 r.repeats, r.repeatOkPct));
         }
-        if (r.osdHz > 0) lines.push_back("   Monitor OSD: " + osdSentence(r.targetFps, r.osdHz, dinfo_.refreshHz, cfg_.vrrMinHz));
+        if (r.osdHz > 0) lines.push_back("   Monitor OSD: " + osdSentence(r.targetFps, r.osdHz, dinfo_.refreshHz, rangeMin()));
         if (!r.csvPath.empty()) lines.push_back("   log: " + r.csvPath);
     }
     lines.push_back("");
     lines.push_back("CONCLUSION");
-    for (const auto& c : guidedConclusion(results_, cfg_.vrrMinHz, dinfo_.refreshHz, lowHz_ > 0, doubling_))
-        lines.push_back("- " + c);
+    for (const auto& c : guidedConclusion(steps, results_, checkContext())) lines.push_back("- " + c);
 
     for (const auto& l : lines) std::printf("%s\n", l.c_str());
     std::fflush(stdout);
@@ -643,10 +841,65 @@ void App::writeReport() {
     }
 }
 
+void App::addRangeLines(const std::function<void(const std::string&, uint32_t)>& add) {
+    if (!rangeKnown()) {
+        add("VRR range: UNKNOWN - this monitor does not report it. Press R (or ENTER) and type it in. It is in the "
+            "monitor's spec sheet or manual (FreeSync / Adaptive-Sync / G-SYNC Compatible range, e.g. 48-144 Hz).",
+            kRed);
+        return;
+    }
+    const bool weak = rangeSource_ == "EDID range limits";
+    add(fmt("VRR range: %.0f-%.0f Hz (%s%s)   R to change", vrrMin_, vrrMax_, rangeSource_.c_str(),
+            weak ? " - check it against the spec sheet" : ""),
+        weak ? kYellow : kGreen);
+    if (modeLimited())
+        add(fmt("The display runs at %.0f Hz, so only %.0f-%.0f Hz of the range is used. Set it to %.0f Hz in the "
+                "display settings for the full check.",
+                dinfo_.refreshHz, vrrMin_, rangeMax(), vrrMax_),
+            kYellow);
+    if (lowHz_ > 0) return;
+    if (lfcPossible(rangeMin(), rangeMax()))
+        add(fmt("LFC possible (%.0f >= 2 x %.0f): below about %.0f FPS a good driver shows each frame several times.",
+                rangeMax(), rangeMin(), lfcThreshold()),
+            kGray);
+    else
+        add(fmt("LFC NOT possible: %.0f Hz is less than twice %.0f Hz, so frames below %.0f FPS cannot be doubled. "
+                "Flicker or stutter there is expected with this range.",
+                rangeMax(), rangeMin(), rangeMin()),
+            kYellow);
+}
+
+void App::addEditorLines(const std::function<void(const std::string&, uint32_t)>& add) {
+    auto field = [&](int idx, const char* label, const std::string& v, const char* hint) {
+        const bool active = editField_ == idx;
+        add(std::string(active ? "> " : "  ") + label + v + (active ? "_" : "") + (active ? hint : ""),
+            active ? kYellow : kWhite);
+    };
+    add(startAfterEdit_ ? "Before the check: enter the monitor's VRR range." : "Change the monitor's VRR range.", kWhite);
+    add("You find it in the monitor's manual or spec sheet (\"FreeSync range\", \"Adaptive-Sync 48-144 Hz\"), in "
+        "AMD Software (Display tab), or in reviews of the monitor. If it only lists a maximum refresh rate, 48 Hz is "
+        "the most common minimum.",
+        kGray);
+    add("", kWhite);
+    field(1, "Minimum refresh rate (Hz): ", editMin_, "");
+    field(2, "Maximum refresh rate (Hz): ", editMax_, "");
+    const double mn = std::atof(editMin_.c_str()), mx = std::atof(editMax_.c_str());
+    if (editField_ < 3 || lfcPossible(mn, mx))
+        field(3, "LFC threshold (FPS): ", editLfc_,
+              editLfc_.empty() ? "   (ENTER = automatic, 1.1 x minimum)" : "");
+    add("", kWhite);
+    add("The LFC threshold is the frame rate below which a driver starts showing each frame several times. Leave it "
+        "empty unless you know your driver's value.",
+        kGray);
+    if (!editError_.empty()) add(editError_, kRed);
+    add("", kWhite);
+    add("Digits to type   BACKSPACE delete   ENTER next   ESC cancel", kWhite);
+}
+
 void App::buildGuidedOverlay(int64_t now) {
     refreshInfo();
     refreshLogState();
-    const auto& steps = guidedSteps(lowHz_ > 0);
+    const auto& steps = steps_;
 
     struct Item {
         std::string text;
@@ -658,7 +911,13 @@ void App::buildGuidedOverlay(int64_t now) {
     auto title = [&](const std::string& t, uint32_t c = kWhite) { items.push_back({t, c, true}); };
     const bool windowed = platform_.windowMode() == WindowMode::Windowed;
 
-    if (mode_ == Mode::Intro) {
+    if (editField_ > 0) {
+        title("MONITOR VRR RANGE", kGreen);
+        std::string mon = "Monitor: " + dinfo_.outputName;
+        if (!dinfo_.monitorName.empty()) mon += " " + dinfo_.monitorName;
+        add(mon, kCyan);
+        addEditorLines(add);
+    } else if (mode_ == Mode::Intro) {
         title("VRR FLICKER CHECK", kGreen);
         add("Finds out whether flicker comes from the monitor or from this computer.");
         add("");
@@ -675,6 +934,8 @@ void App::buildGuidedOverlay(int64_t now) {
         if (!dinfo_.monitorName.empty()) mon += " " + dinfo_.monitorName;
         if (dinfo_.width > 0) mon += fmt(", %dx%d @ %.0f Hz", dinfo_.width, dinfo_.height, dinfo_.refreshHz);
         add(mon, kCyan);
+        addRangeLines(add);
+        if (!rangeNote_.empty()) add(rangeNote_, kGray);
         if (windowed)
             add("Window: NOT fullscreen - press F. VRR normally only works in fullscreen.", kRed);
         else
@@ -684,25 +945,29 @@ void App::buildGuidedOverlay(int64_t now) {
         else add("Display timing: NOT available here - only your own observations will count", kYellow);
         if (lowHz_ > 0) {
             add(fmt("LOW-REFRESH TEST ON: display mode %.0f Hz, VRR range %.0f-%.0f Hz. The driver cannot repeat "
-                    "frames, so the monitor runs near its minimum refresh rate, like on Linux.",
-                    dinfo_.refreshHz, cfg_.vrrMinHz, lowHz_),
+                    "frames, so the monitor runs near its minimum refresh rate, like with drivers without LFC.",
+                    dinfo_.refreshHz, rangeMin(), lowHz_),
                 kYellow);
             add("L  back to the normal test", kWhite);
-        } else {
-            add(fmt("Assumed VRR range: %.0f-%.0f Hz", cfg_.vrrMinHz, cfg_.vrrMaxHz), kGray);
-            if (platform_.canLimitRefresh())
-                add("L  low-refresh test: 60 Hz mode, so the monitor runs near 48 Hz like on Linux", kWhite);
+        } else if (platform_.canLimitRefresh() && rangeKnown()) {
+            add(fmt("L  low-refresh test: a display mode below %.0f Hz, so the monitor runs near %.0f Hz the way "
+                    "drivers without LFC drive it",
+                    vrrMin_ * 2, vrrMin_),
+                kWhite);
         }
         if (!lowStatus_.empty()) add(lowStatus_, kRed);
         if (doubling_)
-            add(fmt("FRAME DOUBLING EXPERIMENT ON: this app shows frames slower than %.0f FPS twice at even intervals, "
-                    "as a driver with LFC would. If the low steps stop flickering, missing frame doubling is the cause.",
-                    cfg_.vrrMinHz * 1.1),
+            add(fmt("FRAME DOUBLING EXPERIMENT ON: this app shows frames slower than %.0f FPS several times at even "
+                    "intervals, as a driver with LFC would. If the low steps stop flickering, missing frame doubling "
+                    "is the cause.",
+                    lfcThreshold()),
                 kYellow);
         else if (cfg_.doubleFrames)
-            add("--double-frames is only available with --api kms; this run shows frames normally.", kRed);
+            add("--double-frames is not available with this graphics backend; this run shows frames normally.", kRed);
         add("");
-        add("ENTER start    TAB advanced mode    Q quit", kWhite);
+        add(rangeKnown() ? "ENTER start    R VRR range    TAB advanced mode    Q quit"
+                         : "ENTER / R enter the VRR range    TAB advanced mode    Q quit",
+            kWhite);
     } else if (mode_ == Mode::Step) {
         const GuidedStep& step = steps[stepIdx_];
         const double el = static_cast<double>(now - stepStartNs_) / 1e9;
@@ -719,8 +984,7 @@ void App::buildGuidedOverlay(int64_t now) {
             liveStepNs_ = now;
         }
         StepResult live = liveStep_;
-        const TestDef& def = allTests()[testIdx_];
-        live.targetFps = def.kind == TestKind::Stable ? def.fpsA : 0.0;
+        live.targetFps = curDef_.kind == TestKind::Stable ? curDef_.fpsA : 0.0;
         if (live.verdict.timing == Timing::NoData) {
             add(binfo_.timingAvailable ? "Timing: measuring..." : "Timing: not available on this system", kGray);
         } else {
@@ -737,21 +1001,21 @@ void App::buildGuidedOverlay(int64_t now) {
                 kGray);
             if (osdInput_.empty()) add("Type the Hz your monitor shows (optional): _", kWhite);
             else add("Monitor shows: " + osdInput_ + "_   " +
-                         osdSentence(live.targetFps, std::atoi(osdInput_.c_str()), dinfo_.refreshHz, cfg_.vrrMinHz),
+                         osdSentence(live.targetFps, std::atoi(osdInput_.c_str()), dinfo_.refreshHz, rangeMin()),
                      kWhite);
         } else {
-            add("Monitor Hz with VRR: " + osdExpected(live.targetFps, cfg_.vrrMinHz, lowHz_ > 0 ? lowHz_ : cfg_.vrrMaxHz) +
+            add("Monitor Hz with VRR: " + osdExpected(live.targetFps, rangeMin(), rangeMax()) +
                     " (a whole multiple of the FPS)",
                 kGray);
             if (osdInput_.empty()) {
                 add("Type the Hz your monitor shows (optional): _", kWhite);
             } else {
-                const OsdReading o = interpretOsd(live.targetFps, std::atoi(osdInput_.c_str()), dinfo_.refreshHz, cfg_.vrrMinHz);
+                const OsdReading o = interpretOsd(live.targetFps, std::atoi(osdInput_.c_str()), dinfo_.refreshHz, rangeMin());
                 const uint32_t c = o.fit == OsdFit::Multiple                                     ? kGreen
                                    : o.fit == OsdFit::Ambiguous || o.fit == OsdFit::AtMinimum ? kYellow
                                                                                               : kRed;
                 add("Monitor shows: " + osdInput_ + "_   " +
-                        osdSentence(live.targetFps, std::atoi(osdInput_.c_str()), dinfo_.refreshHz, cfg_.vrrMinHz),
+                        osdSentence(live.targetFps, std::atoi(osdInput_.c_str()), dinfo_.refreshHz, rangeMin()),
                     c);
             }
         }
@@ -769,6 +1033,10 @@ void App::buildGuidedOverlay(int64_t now) {
         add("H hide text   LEFT/RIGHT pattern   ESC cancel", kGray);
     } else {
         title("RESULT", kGreen);
+        add(fmt("Monitor %s, VRR range %.0f-%.0f Hz (%s)", dinfo_.monitorName.empty() ? dinfo_.outputName.c_str()
+                                                                                    : dinfo_.monitorName.c_str(),
+                rangeMin(), rangeMax(), rangeSource_.c_str()),
+            kGray);
         add(fmt("  %-24s %-13s %-11s %s", "TEST", "TIMING", "YOU SAW", "MONITOR"), kGray);
         for (size_t i = 0; i < results_.size(); ++i) {
             const auto& r = results_[i];
@@ -777,17 +1045,17 @@ void App::buildGuidedOverlay(int64_t now) {
             if (r.verdict.timing == Timing::AppLate) c = kGray;
             if (r.answer == Answer::Yes) c = kYellow;
             const std::string osd = r.osdHz > 0 ? fmt("%d Hz", r.osdHz) : std::string("-");
-            add(fmt("%d %-24s %-13s %-11s %s", static_cast<int>(i + 1), steps[i].title, timingLabel(r.verdict.timing),
-                    answerLabel(r.answer), osd.c_str()),
+            add(fmt("%d %-24s %-13s %-11s %s", static_cast<int>(i + 1), steps[i].title.c_str(),
+                    timingLabel(r.verdict.timing), answerLabel(r.answer), osd.c_str()),
                 c);
         }
         add("");
-        for (const auto& p : guidedConclusion(results_, cfg_.vrrMinHz, dinfo_.refreshHz, lowHz_ > 0, doubling_)) {
+        for (const auto& p : guidedConclusion(steps, results_, checkContext())) {
             add(p);
             add("");
         }
         if (!reportPath_.empty()) add("Report saved: " + reportPath_, kGray);
-        add("ENTER run again    TAB advanced mode    Q quit", kWhite);
+        add("ENTER run again    R VRR range    TAB advanced mode    Q quit", kWhite);
     }
 
     // Lay out with the largest text size that fits on screen.
@@ -874,7 +1142,7 @@ int App::run() {
         if (pendingAutostart && nowNs() >= autostartAt) {
             pendingAutostart = false;
             if (mode_ == Mode::Advanced && !running_) startTest(nowNs(), params_);
-            else if (mode_ == Mode::Intro) startStep(0);
+            else if (mode_ == Mode::Intro) requestStart();
         }
 
         double interval;
@@ -988,7 +1256,7 @@ int App::run() {
                 r.targetFps = 1.0 / interval;
                 r.status = po.status;
                 r.late = late;
-                r.belowFloor = ftMs > 1000.0 / cfg_.vrrMinHz * 1.003;
+                r.belowFloor = ftMs > 1000.0 / rangeMin() * 1.003;
                 r.state = logState_;
                 log_.push(r);
             }

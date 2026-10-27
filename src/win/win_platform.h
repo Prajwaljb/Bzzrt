@@ -32,6 +32,7 @@ public:
     void setWindowMode(WindowMode m) override;
     DisplayInfo displayInfo() override;
     bool canLimitRefresh() const override { return true; }
+    std::vector<double> availableRefreshRates() override;
     bool setRefreshCeiling(double hz) override;
 
 private:

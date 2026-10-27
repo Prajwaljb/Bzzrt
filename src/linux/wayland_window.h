@@ -78,6 +78,9 @@ public:
     bool shift_ = false;
     WindowMode mode_ = WindowMode::Borderless;
     std::vector<KeyEvent> pendingKeys_;
+    std::string edidConnector_;  // EDID cache: read again only when the window moves to another output
+    std::vector<uint8_t> edid_;
+    bool edidRead_ = false;
 };
 
 }  // namespace vrr

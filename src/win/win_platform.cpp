@@ -1,7 +1,8 @@
 #include "win_platform.h"
 
-#include <algorithm>
+#include <setupapi.h>
 
+#include <algorithm>
 #include <cstdio>
 
 #include "dxgi_backend_base.h"
@@ -14,6 +15,43 @@ std::string narrow(const wchar_t* w) {
     std::string s(static_cast<size_t>(n > 0 ? n - 1 : 0), '\0');
     if (n > 1) WideCharToMultiByte(CP_UTF8, 0, w, -1, &s[0], n, nullptr, nullptr);
     return s;
+}
+
+// GUID_DEVINTERFACE_MONITOR, defined here to avoid pulling in the DDK headers.
+static const GUID kMonitorInterface = {0xe6f07b5f, 0xee97, 0x4a90, {0xb0, 0x76, 0x33, 0xf5, 0x7b, 0xf4, 0xea, 0xa7}};
+
+// The EDID Windows keeps in the monitor's device registry key. devicePath is the monitor's device interface path
+// from DISPLAYCONFIG_TARGET_DEVICE_NAME.
+static std::vector<uint8_t> readMonitorEdid(const wchar_t* devicePath) {
+    std::vector<uint8_t> edid;
+    if (!devicePath || !*devicePath) return edid;
+    HDEVINFO set = SetupDiGetClassDevsW(&kMonitorInterface, nullptr, nullptr, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+    if (set == INVALID_HANDLE_VALUE) return edid;
+    SP_DEVICE_INTERFACE_DATA ifd{};
+    ifd.cbSize = sizeof ifd;
+    for (DWORD i = 0; edid.empty() && SetupDiEnumDeviceInterfaces(set, nullptr, &kMonitorInterface, i, &ifd); ++i) {
+        DWORD need = 0;
+        SetupDiGetDeviceInterfaceDetailW(set, &ifd, nullptr, 0, &need, nullptr);
+        if (need < sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W)) continue;
+        std::vector<uint8_t> buf(need);
+        auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(buf.data());
+        detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
+        SP_DEVINFO_DATA dev{};
+        dev.cbSize = sizeof dev;
+        if (!SetupDiGetDeviceInterfaceDetailW(set, &ifd, detail, need, nullptr, &dev)) continue;
+        if (_wcsicmp(detail->DevicePath, devicePath) != 0) continue;
+        HKEY key = SetupDiOpenDevRegKey(set, &dev, DICS_FLAG_GLOBAL, 0, DIREG_DEV, KEY_READ);
+        if (key == INVALID_HANDLE_VALUE) continue;
+        DWORD type = 0, size = 0;
+        if (RegQueryValueExW(key, L"EDID", nullptr, &type, nullptr, &size) == ERROR_SUCCESS && size >= 128) {
+            edid.resize(size);
+            if (RegQueryValueExW(key, L"EDID", nullptr, &type, edid.data(), &size) != ERROR_SUCCESS) edid.clear();
+            else edid.resize(size);
+        }
+        RegCloseKey(key);
+    }
+    SetupDiDestroyDeviceInfoList(set);
+    return edid;
 }
 
 static Key keyFromVk(WPARAM vk) {
@@ -84,7 +122,7 @@ bool WinPlatform::create(const Config& cfg, std::string& err) {
         x = mi.rcWork.left + std::max(0, static_cast<int>(mi.rcWork.right - mi.rcWork.left) - w) / 2;
         y = mi.rcWork.top + std::max(0, static_cast<int>(mi.rcWork.bottom - mi.rcWork.top) - h) / 2;
     }
-    hwnd_ = CreateWindowExW(0, wc.lpszClassName, L"VRR/LFC diagnostic", WS_OVERLAPPEDWINDOW, x, y, w, h, nullptr,
+    hwnd_ = CreateWindowExW(0, wc.lpszClassName, L"Synchora - VRR flicker check", WS_OVERLAPPEDWINDOW, x, y, w, h, nullptr,
                             nullptr, inst, this);
     if (!hwnd_) return err = "CreateWindowExW failed", false;
     ShowWindow(hwnd_, SW_SHOW);
@@ -214,8 +252,10 @@ void WinPlatform::queryDisplay() {
         tn.header.size = sizeof tn;
         tn.header.adapterId = p.targetInfo.adapterId;
         tn.header.id = p.targetInfo.id;
-        if (DisplayConfigGetDeviceInfo(&tn.header) == ERROR_SUCCESS)
+        if (DisplayConfigGetDeviceInfo(&tn.header) == ERROR_SUCCESS) {
             cached_.monitorName = narrow(tn.monitorFriendlyDeviceName);
+            cached_.edid = readMonitorEdid(tn.monitorDevicePath);
+        }
 
         DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO ci{};
         ci.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
@@ -244,6 +284,26 @@ bool WinPlatform::setRefreshCeiling(double hz) {
         return false;
     }
     return true;
+}
+
+std::vector<double> WinPlatform::availableRefreshRates() {
+    std::vector<double> hz;
+    MONITORINFOEXW mi{};
+    mi.cbSize = sizeof mi;
+    if (!GetMonitorInfoW(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST), &mi)) return hz;
+    DEVMODEW cur{};
+    cur.dmSize = sizeof cur;
+    if (!EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &cur)) return hz;
+    DEVMODEW dm{};
+    dm.dmSize = sizeof dm;
+    for (DWORD i = 0; EnumDisplaySettingsW(mi.szDevice, i, &dm); ++i) {
+        if (dm.dmPelsWidth != cur.dmPelsWidth || dm.dmPelsHeight != cur.dmPelsHeight || dm.dmDisplayFrequency <= 1)
+            continue;
+        const double f = dm.dmDisplayFrequency;
+        if (std::find(hz.begin(), hz.end(), f) == hz.end()) hz.push_back(f);
+    }
+    std::sort(hz.begin(), hz.end());
+    return hz;
 }
 
 DisplayInfo WinPlatform::displayInfo() {

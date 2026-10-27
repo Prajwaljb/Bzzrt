@@ -17,9 +17,11 @@ set(COMMON_SOURCES
   src/common/clock.cpp
   src/common/config.cpp
   src/common/csv_log.cpp
+  src/common/edid.cpp
   src/common/image_load.cpp
   src/common/overlay.cpp
   src/common/patterns.cpp
+  src/common/range_store.cpp
   src/common/scheduler.cpp
   src/common/stats.cpp
 )
@@ -48,7 +50,7 @@ if(WIN32)
   add_executable(vrrdiag ${COMMON_SOURCES} ${WIN_SOURCES})
   target_include_directories(vrrdiag PRIVATE ${GEN_DIR})
   target_compile_definitions(vrrdiag PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
-  target_link_libraries(vrrdiag PRIVATE d3d12 dxgi d3dcompiler dxguid winmm avrt)
+  target_link_libraries(vrrdiag PRIVATE d3d12 dxgi d3dcompiler dxguid winmm avrt setupapi)
   if(VRRDIAG_D3D11)
     target_compile_definitions(vrrdiag PRIVATE VRRDIAG_HAVE_D3D11)
     target_link_libraries(vrrdiag PRIVATE d3d11)
@@ -77,6 +79,7 @@ elseif(UNIX AND NOT APPLE)
     src/linux/main_linux.cpp
     src/linux/vk_backend.cpp
     src/linux/evdev_keys.cpp
+    src/linux/sysfs_edid.cpp
   )
   set(LINUX_DEFS "")
   set(LINUX_LIBS Vulkan::Vulkan Threads::Threads)
@@ -169,8 +172,35 @@ elseif(UNIX AND NOT APPLE)
   target_include_directories(vrrdiag PRIVATE ${LINUX_INCS})
   target_link_libraries(vrrdiag PRIVATE ${LINUX_LIBS})
   target_compile_options(vrrdiag PRIVATE -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
+elseif(APPLE)
+  # ------------------------------------------------------------------ macOS
+  enable_language(OBJCXX)
+  # Embed the Metal source; it is compiled at runtime with newLibraryWithSource.
+  file(READ ${CMAKE_CURRENT_SOURCE_DIR}/shaders/pattern.metal METAL_SOURCE)
+  file(WRITE ${GEN_DIR}/pattern_metal.h.tmp
+    "// Generated from shaders/pattern.metal\n#pragma once\nstatic const char kPatternMetal[] = R\"METAL(${METAL_SOURCE})METAL\";\n")
+  configure_file(${GEN_DIR}/pattern_metal.h.tmp ${GEN_DIR}/pattern_metal.h COPYONLY)
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/shaders/pattern.metal)
+
+  set(MAC_SOURCES
+    src/mac/main_mac.mm
+    src/mac/mac_platform.mm
+    src/mac/metal_backend.mm
+  )
+  set(MAC_LIBS "-framework AppKit" "-framework Metal" "-framework QuartzCore" "-framework CoreGraphics")
+  add_executable(vrrdiag ${COMMON_SOURCES} ${MAC_SOURCES})
+  target_include_directories(vrrdiag PRIVATE ${GEN_DIR})
+  target_link_libraries(vrrdiag PRIVATE ${MAC_LIBS})
+  target_compile_options(vrrdiag PRIVATE -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
+                         $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+
+  # Compiles the embedded Metal source on this machine's GPU (used by CI to catch shader errors).
+  add_executable(metal_shader_check tools/metal_shader_check.mm)
+  target_include_directories(metal_shader_check PRIVATE ${GEN_DIR})
+  target_link_libraries(metal_shader_check PRIVATE "-framework Foundation" "-framework Metal")
+  target_compile_options(metal_shader_check PRIVATE -fobjc-arc)
 else()
-  message(FATAL_ERROR "Only Windows and Linux are supported.")
+  message(FATAL_ERROR "Only Windows, Linux and macOS are supported.")
 endif()
 
 install(TARGETS vrrdiag RUNTIME DESTINATION bin)

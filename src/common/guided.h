@@ -11,15 +11,25 @@
 namespace vrr {
 
 struct GuidedStep {
-    const char* testId;   // scheduler test driving the step
-    const char* title;
-    const char* explain;  // one sentence shown under the title
-    bool changing;        // frame rate changes during the step
+    TestDef test;         // scheduler test driving the step
+    std::string logId;    // test id in CSV file names, e.g. "stable45"
+    std::string title;
+    std::string explain;  // one sentence shown under the title
+    bool changing = false;                // frame rate changes during the step
     double jitterMin = 0, jitterMax = 0;  // jitter steps override the TestParams range
 };
 
-// lowRefresh: the variant for a 60 Hz display mode (VRR range 48-60 Hz), see Platform::setRefreshCeiling.
-const std::vector<GuidedStep>& guidedSteps(bool lowRefresh = false);
+// Frame doubling (LFC) needs room for a doubled frame inside the range: maximum >= 2 x minimum.
+bool lfcPossible(double vrrMinHz, double vrrMaxHz);
+
+// The check's steps, built around the monitor's VRR range: in range, just above the minimum, below it, far below
+// it, and frame rates that cross it. ceilingHz > 0 builds the low-refresh variant for a display mode of that
+// refresh rate (see Platform::setRefreshCeiling), in which frames below the minimum cannot be shown twice.
+std::vector<GuidedStep> guidedSteps(double vrrMinHz, double vrrMaxHz, double ceilingHz = 0);
+
+// The refresh rate to use for the low-refresh variant: one of the available rates that is above the minimum but
+// below twice of it, closest to 1.25 x the minimum. 0 if none fits.
+double pickRefreshCeiling(double vrrMinHz, const std::vector<double>& availableHz);
 
 // AppLate: the app itself missed its own frame times, so the step says nothing about the driver.
 enum class Timing { NoData, Even, Uneven, FixedRefresh, AppLate };
@@ -73,8 +83,15 @@ const char* timingLabel(Timing t);
 const char* answerLabel(Answer a);
 // Short explanation of a verdict, e.g. "frames alternated 26 / 18 ms instead of an even 22.2 ms".
 std::string timingSentence(const GuidedStep& step, const StepResult& r);
-// Paragraphs of the final conclusion. doubling: the app showed slow frames several times itself (--double-frames).
-std::vector<std::string> guidedConclusion(const std::vector<StepResult>& results, double vrrMinHz, double refreshHz,
-                                          bool lowRefresh = false, bool doubling = false);
+struct CheckContext {
+    double vrrMinHz = 0, vrrMaxHz = 0;  // range the steps were built for (maximum limited by the display mode)
+    double monitorMaxHz = 0;            // the monitor's own VRR maximum
+    double refreshHz = 0;               // display mode refresh rate, 0 = unknown
+    bool lowRefresh = false;            // low-refresh variant
+    bool doubling = false;              // the app showed slow frames several times itself (--double-frames)
+};
+// Paragraphs of the final conclusion.
+std::vector<std::string> guidedConclusion(const std::vector<GuidedStep>& steps, const std::vector<StepResult>& results,
+                                          const CheckContext& ctx);
 
 }  // namespace vrr

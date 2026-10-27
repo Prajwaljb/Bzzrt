@@ -1,0 +1,90 @@
+#include "range_store.h"
+
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <vector>
+
+namespace vrr {
+
+namespace fs = std::filesystem;
+
+namespace {
+
+std::string env(const char* name) {
+    const char* v = std::getenv(name);
+    return v ? v : "";
+}
+
+std::string storePath() {
+    const std::string dir = configDir();
+    return dir.empty() ? std::string() : (fs::path(dir) / "ranges.txt").string();
+}
+
+// One monitor per line: key, minimum Hz, maximum Hz, LFC threshold FPS (0 = automatic).
+std::vector<std::pair<std::string, SavedRange>> readAll() {
+    std::vector<std::pair<std::string, SavedRange>> out;
+    std::ifstream f(storePath());
+    std::string line;
+    while (std::getline(f, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        std::istringstream is(line);
+        std::string key;
+        SavedRange r;
+        if (is >> key >> r.minHz >> r.maxHz) {
+            if (!(is >> r.lfcFps)) r.lfcFps = 0;
+            if (r.minHz > 0 && r.maxHz > r.minHz) out.push_back({key, r});
+        }
+    }
+    return out;
+}
+
+}  // namespace
+
+std::string configDir() {
+#if defined(_WIN32)
+    const std::string base = env("APPDATA");
+    return base.empty() ? std::string() : (fs::path(base) / "Synchora").string();
+#elif defined(__APPLE__)
+    const std::string home = env("HOME");
+    return home.empty() ? std::string() : (fs::path(home) / "Library" / "Application Support" / "Synchora").string();
+#else
+    std::string base = env("XDG_CONFIG_HOME");
+    if (base.empty()) {
+        const std::string home = env("HOME");
+        if (home.empty()) return {};
+        base = (fs::path(home) / ".config").string();
+    }
+    return (fs::path(base) / "synchora").string();
+#endif
+}
+
+bool loadRange(const std::string& monitorKey, SavedRange& out) {
+    if (monitorKey.empty()) return false;
+    for (const auto& [key, r] : readAll())
+        if (key == monitorKey) {
+            out = r;
+            return true;
+        }
+    return false;
+}
+
+std::string saveRange(const std::string& monitorKey, const SavedRange& r) {
+    const std::string path = storePath();
+    if (monitorKey.empty() || path.empty()) return {};
+    auto all = readAll();
+    bool found = false;
+    for (auto& [key, v] : all)
+        if (key == monitorKey) v = r, found = true;
+    if (!found) all.push_back({monitorKey, r});
+    std::error_code ec;
+    fs::create_directories(fs::path(path).parent_path(), ec);
+    std::ofstream f(path, std::ios::trunc);
+    if (!f) return {};
+    f << "# Synchora: VRR range per monitor (key min_hz max_hz lfc_threshold_fps, 0 = automatic)\n";
+    for (const auto& [key, v] : all) f << key << ' ' << v.minHz << ' ' << v.maxHz << ' ' << v.lfcFps << '\n';
+    return f ? path : std::string();
+}
+
+}  // namespace vrr

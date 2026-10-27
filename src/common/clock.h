@@ -7,7 +7,8 @@ namespace vrr {
 
 // Monotonic time in nanoseconds.
 // Linux: CLOCK_MONOTONIC (same domain as KMS page-flip events and Mesa's
-// VK_GOOGLE_display_timing). Windows: QueryPerformanceCounter.
+// VK_GOOGLE_display_timing). Windows: QueryPerformanceCounter. macOS: mach_absolute_time
+// (same domain as MTLDrawable presentedTime).
 int64_t nowNs();
 
 // Lowers OS timer granularity / timer slack and raises thread priority where possible.

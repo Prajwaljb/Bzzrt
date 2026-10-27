@@ -22,8 +22,8 @@ const std::vector<TestDef>& allTests() {
         {"stable40", "Stable 40 FPS", TestKind::Stable, 40, 0},
         {"stable30", "Stable 30 FPS", TestKind::Stable, 30, 0},
         {"custom", "Stable custom FPS (+/-)", TestKind::Custom, 0, 0},
-        {"lfc50", "LFC: stable 50 FPS (just above floor)", TestKind::Stable, 50, 0},
-        {"lfc47", "LFC: stable 47 FPS (just below floor)", TestKind::Stable, 47, 0},
+        {"lfc50", "LFC: stable 50 FPS (just above a 48 Hz floor)", TestKind::Stable, 50, 0},
+        {"lfc47", "LFC: stable 47 FPS (just below a 48 Hz floor)", TestKind::Stable, 47, 0},
         {"sweep", "LFC: smooth 45-55 FPS sweep", TestKind::Sweep, 45, 55},
         {"switch47-50", "LFC: repeated 50 <-> 47 FPS", TestKind::Switch, 50, 47},
         {"switch60-45", "LFC: repeated 60 -> 45 -> 60 FPS", TestKind::Switch, 60, 45},
@@ -51,17 +51,17 @@ std::string describeTest(const TestDef& d, const TestParams& p) {
             std::snprintf(buf, sizeof buf, "Stable custom %.2f FPS (+/-)", p.customFps);
             return buf;
         case TestKind::Sweep:
-            std::snprintf(buf, sizeof buf, "%s (period %.1f s)", d.name, p.sweepPeriodSec);
+            std::snprintf(buf, sizeof buf, "%s (period %.1f s)", d.name.c_str(), p.sweepPeriodSec);
             return buf;
         case TestKind::Switch:
-            std::snprintf(buf, sizeof buf, "%s (%.2f s each)", d.name, p.switchPeriodSec);
+            std::snprintf(buf, sizeof buf, "%s (%.2f s each)", d.name.c_str(), p.switchPeriodSec);
             return buf;
         case TestKind::Spikes:
-            std::snprintf(buf, sizeof buf, "Jitter: 60 FPS + %.0f-%.0f ms spikes x%d @ %.2f/s",
+            std::snprintf(buf, sizeof buf, "Jitter: %.0f FPS + %.0f-%.0f ms spikes x%d @ %.2f/s", d.fpsA,
                           p.spikeMinMs, p.spikeMaxMs, p.spikeFrames, p.spikeRateHz);
             return buf;
         case TestKind::Drops:
-            std::snprintf(buf, sizeof buf, "Jitter: 55 FPS + drops to %.0f-%.0f FPS (%.2f s @ %.2f/s)",
+            std::snprintf(buf, sizeof buf, "Jitter: %.0f FPS + drops to %.0f-%.0f FPS (%.2f s @ %.2f/s)", d.fpsA,
                           p.dropMinFps, p.dropMaxFps, p.dropDurationSec, p.dropRateHz);
             return buf;
         case TestKind::Jitter:

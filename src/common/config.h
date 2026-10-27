@@ -29,8 +29,9 @@ struct Config {
     bool overlay = true;
     bool frameCounter = false;
     double idleFps = 100.0;
-    double vrrMinHz = 48.0;
-    double vrrMaxHz = 200.0;
+    double vrrMinHz = 0.0;     // 0 = detect (EDID / OS), else ask
+    double vrrMaxHz = 0.0;
+    double lfcFps = 0.0;       // frame rate below which frames are shown several times, 0 = automatic
     TestParams params;
     std::string kmsDevice;     // /dev/dri/cardN
     std::string kmsConnector;  // e.g. DP-2
@@ -39,7 +40,10 @@ struct Config {
     bool debug = false;
     bool listTests = false;
     bool help = false;
+    bool version = false;
 };
+
+constexpr const char* kVersion = "1.0.0";
 
 // Returns false on error (message in err).
 bool parseArgs(int argc, char** argv, Config& cfg, std::string& err);

@@ -33,6 +33,10 @@ int main(int argc, char** argv) {
         printUsage(argv[0]);
         return 0;
     }
+    if (cfg.version) {
+        std::printf("Synchora %s\n", kVersion);
+        return 0;
+    }
     if (cfg.listTests) {
         printTests();
         return 0;

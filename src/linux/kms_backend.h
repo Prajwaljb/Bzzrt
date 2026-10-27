@@ -83,6 +83,7 @@ private:
     TtyInput tty_;
     int fd_ = -1;
     std::string cardPath_, driverName_, connName_, monitorName_, edidRange_;
+    std::vector<uint8_t> edid_;
     uint32_t connId_ = 0, crtcId_ = 0, planeId_ = 0;
     int crtcIndex_ = 0;
     drmModeModeInfo mode_{};

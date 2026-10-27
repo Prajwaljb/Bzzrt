@@ -1,0 +1,95 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    # The oldest supported runner, so the binary runs on older glibc versions too.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build pkg-config glslang-tools \
+            libvulkan-dev libwayland-dev wayland-protocols libxcb1-dev libxcb-randr0-dev libdrm-dev
+      - name: Build and package
+        run: ./package-linux.sh
+      - name: Smoke test
+        run: |
+          dist/linux/vrrdiag --version
+          dist/linux/vrrdiag --help > /dev/null
+          dist/linux/vrrdiag --list-tests > /dev/null
+      - name: Archive
+        run: |
+          VERSION=$(dist/linux/vrrdiag --version | awk '{print $2}')
+          mv dist/linux "dist/synchora-$VERSION-linux-x86_64"
+          tar -C dist -czf "synchora-$VERSION-linux-x86_64.tar.gz" "synchora-$VERSION-linux-x86_64"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: synchora-*-linux-x86_64.tar.gz
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        shell: cmd
+        run: build-windows.bat
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          dist\windows\vrrdiag.exe --version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Archive
+        shell: pwsh
+        run: |
+          $v = (& dist\windows\vrrdiag.exe --version).Split(' ')[1]
+          Rename-Item dist\windows "synchora-$v-windows-x64"
+          Compress-Archive -Path "dist\synchora-$v-windows-x64" -DestinationPath "synchora-$v-windows-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: synchora-*-windows-x64.zip
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and package
+        run: ./package-macos.sh
+      - name: Shader check
+        run: build-mac/metal_shader_check
+      - name: Smoke test
+        run: |
+          file dist/macos/Synchora.app/Contents/MacOS/vrrdiag
+          dist/macos/Synchora.app/Contents/MacOS/vrrdiag --version
+          dist/macos/Synchora.app/Contents/MacOS/vrrdiag --help > /dev/null
+          codesign --verify --verbose dist/macos/Synchora.app
+      - name: Run a short test (needs the runner's GUI session)
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          mkdir -p logs
+          dist/macos/Synchora.app/Contents/MacOS/vrrdiag --windowed --test stable60 --start --duration 4 \
+            --exit-after --log-dir logs --vrr-min 48 --vrr-max 120
+          ls -l logs
+          head -20 logs/*.csv
+      - name: Archive
+        run: |
+          VERSION=$(dist/macos/Synchora.app/Contents/MacOS/vrrdiag --version | awk '{print $2}')
+          mv dist/macos "dist/synchora-$VERSION-macos-arm64"
+          ditto -c -k --keepParent "dist/synchora-$VERSION-macos-arm64" "synchora-$VERSION-macos-arm64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: synchora-*-macos-arm64.zip
