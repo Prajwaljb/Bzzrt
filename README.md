@@ -30,9 +30,9 @@
 
 | Platform | Package | Needs |
 |---|---|---|
-| 🪟 **Windows** 10/11 x64 | [`synchora-1.0.0-windows-x64.zip`](https://github.com/Prajwaljb/Synchora/releases/latest/download/synchora-1.0.0-windows-x64.zip) | D3D12 or D3D11 GPU |
-| 🐧 **Linux** x86_64 | [`synchora-1.0.0-linux-x86_64.tar.gz`](https://github.com/Prajwaljb/Synchora/releases/latest/download/synchora-1.0.0-linux-x86_64.tar.gz) | Vulkan driver, glibc 2.34+ (Ubuntu 22.04+, Fedora 35+, Arch) |
-| 🍎 **macOS** 12+ Apple silicon | [`synchora-1.0.0-macos-arm64.zip`](https://github.com/Prajwaljb/Synchora/releases/latest/download/synchora-1.0.0-macos-arm64.zip) | not notarized: allow it once under System Settings → Privacy & Security → *Open Anyway* |
+| 🪟 **Windows** 10/11 x64 | [`synchora-1.0.1-windows-x64.zip`](https://github.com/Prajwaljb/Synchora/releases/latest/download/synchora-1.0.1-windows-x64.zip) | D3D12 or D3D11 GPU |
+| 🐧 **Linux** x86_64 | [`synchora-1.0.1-linux-x86_64.tar.gz`](https://github.com/Prajwaljb/Synchora/releases/latest/download/synchora-1.0.1-linux-x86_64.tar.gz) | Vulkan driver, glibc 2.34+ (Ubuntu 22.04+, Fedora 35+, Arch) |
+| 🍎 **macOS** 12+ Apple silicon | [`synchora-1.0.1-macos-arm64.zip`](https://github.com/Prajwaljb/Synchora/releases/latest/download/synchora-1.0.1-macos-arm64.zip) | not notarized: allow it once under System Settings → Privacy & Security → *Open Anyway* |
 
 Unpack it, start it on the monitor you want to test and press **ENTER**. Synchora reads the monitor's VRR range from
 its EDID. If it can't find one, or the detected range is wrong, you type in the range before the test starts
