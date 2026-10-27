@@ -1,7 +1,7 @@
 Synchora - VRR flicker check
 ============================
 
-Does VRR flicker come from your monitor or from your computer? This tool finds out.
+Synchora diagnoses VRR flicker by separating monitor behaviour from frame pacing.
 Works with FreeSync, Adaptive-Sync, G-SYNC Compatible, HDMI VRR and ProMotion displays.
 
 1. Turn on Adaptive-Sync / FreeSync in the monitor's own menu, and in the system:

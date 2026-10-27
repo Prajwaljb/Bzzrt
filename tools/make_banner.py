@@ -31,7 +31,7 @@ o.append(f'<rect x="{cx}" y="{cy}" width="{cw}" height="{ch}" fill="#000" fill-o
 px = cx + 44; py = cy + 58
 text(px, py, 'SYNCHORA', WHITE, 9)
 text(px, py + 100, 'VRR / LFC FLICKER CHECK', YELLOW, 3)
-text(px, py + 140, 'Is it the monitor or the PC?', CYAN, 2)
+text(px, py + 140, 'Frame pacing and LFC analysis', CYAN, 2)
 text(px, py + 166, 'Windows  Linux  macOS', GRAY, 2)
 # present interval histogram, 0-50 ms in 0.5 ms bins, VRR 48-200 Hz
 bins, bw, hh = 101, 5, 150

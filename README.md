@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <b>Does your VRR flicker come from the monitor or from the computer?</b><br>
-  A guided 2-minute check for FreeSync, G-SYNC Compatible, Adaptive-Sync, HDMI VRR and ProMotion displays.
+  <b>Diagnostics for variable refresh rate flicker, frame pacing and low framerate compensation.</b><br>
+  For FreeSync, G-SYNC Compatible, VESA Adaptive-Sync, HDMI VRR and ProMotion displays.
 </p>
 
 <p align="center">
