@@ -8,12 +8,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Prajwaljb/Synchora/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Prajwaljb/Synchora?style=flat-square&color=2dd4bf"></a>
+  <a href="https://github.com/Prajwaljb/Synchora/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Prajwaljb/Synchora?style=flat-square&color=5ae66e"></a>
   <a href="https://github.com/Prajwaljb/Synchora/actions/workflows/build.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/Prajwaljb/Synchora/build.yml?branch=main&style=flat-square"></a>
-  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-6366f1?style=flat-square">
-  <img alt="APIs" src="https://img.shields.io/badge/D3D12%20%7C%20Vulkan%20%7C%20Metal-native-f59e0b?style=flat-square">
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/Prajwaljb/Synchora?style=flat-square&color=94a3b8"></a>
-  <a href="https://github.com/Prajwaljb/Synchora/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/Prajwaljb/Synchora/total?style=flat-square&color=fb7185"></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-5ad2ff?style=flat-square">
+  <img alt="APIs" src="https://img.shields.io/badge/D3D12%20%7C%20Vulkan%20%7C%20Metal-native-ffdc3c?style=flat-square">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/Prajwaljb/Synchora?style=flat-square&color=a0a0a0"></a>
+  <a href="https://github.com/Prajwaljb/Synchora/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/Prajwaljb/Synchora/total?style=flat-square&color=ff5046"></a>
 </p>
 
 <p align="center">
@@ -434,7 +434,7 @@ src/linux/    Vulkan backend, Wayland and X11 windows, DRM/KMS backend, TTY inpu
 src/mac/      Cocoa window, Metal backend
 shaders/      pattern.hlsl (D3D), pattern.vert/.frag (Vulkan) + prebuilt SPIR-V, pattern.metal (Metal)
 packaging/    Linux desktop entry, launcher and icon; macOS Info.plist; QUICKSTART
-tools/        metal_shader_check (CI)
+tools/        metal_shader_check (CI), make_banner.py (README banner and social preview)
 cmake/        MinGW-w64 toolchain file for cross-compiling the Windows .exe
 ```
 
