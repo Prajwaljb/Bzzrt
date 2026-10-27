@@ -28,14 +28,13 @@ def text(x, y, s, color, sc):
 cx, cw = 40, W - 80
 ch = 312; cy = (H - ch) // 2
 o.append(f'<rect x="{cx}" y="{cy}" width="{cw}" height="{ch}" fill="#000" fill-opacity=".84"/>')
-px = cx + 44; py = cy + 58
+px = cx + 44; py = cy + 76
 text(px, py, 'SYNCHORA', WHITE, 9)
-text(px, py + 100, 'VRR / LFC FLICKER CHECK', YELLOW, 3)
-text(px, py + 140, 'Frame pacing and LFC analysis', CYAN, 2)
-text(px, py + 166, 'Windows  Linux  macOS', GRAY, 2)
+text(px, py + 100, 'VRR FLICKER ANALYSIS', YELLOW, 3)
+text(px, py + 146, 'Windows  Linux  macOS', GRAY, 2)
 # present interval histogram, 0-50 ms in 0.5 ms bins, VRR 48-200 Hz
 bins, bw, hh = 101, 5, 150
-hx = cx + cw - 44 - bins * bw - 0; hy = cy + 40
+hx = cx + cw - 44 - bins * bw - 0; hy = cy + 52
 counts = [0.0] * bins
 def bump(ms, n, spread):
     for i in range(bins):
@@ -54,14 +53,12 @@ for i, n in enumerate(counts):
     o.append(f'<rect x="{hx + i*bw}" y="{hy + hh - h}" width="{bw-1}" height="{h}" fill="{col}"/>')
 for ms, col in ((lo, YELLOW), (hi, RED)):
     o.append(f'<rect x="{hx + round(ms / .5 * bw)}" y="{hy}" width="2" height="{hh}" fill="{col}"/>')
+text(hx + round(hi / .5 * bw) + 10, hy + 10, 'LFC', RED, 2)
 ly = hy + hh + 12
 text(hx, ly, '0', GRAY, 2); text(hx + 50*bw - 16, ly, '25', GRAY, 2); text(hx + 96*bw - 8, ly, '50+', GRAY, 2)
-text(hx, ly + 30, 'present interval (ms)', GRAY, 2)
-text(hx, ly + 56, 'red: > 20.83 ms  LFC zone', RED, 2)
+text(hx, ly + 30, 'frame interval (ms)', GRAY, 2)
 if H >= 500:
-    hint = 'ENTER start   R enter range   A detected/yours   Q quit'
-    text((W - 16 * len(hint)) // 2, cy + ch + 40, hint, GRAY, 2)
-    t2 = 'FreeSync - G-SYNC Compatible - Adaptive-Sync - HDMI VRR'
-    text((W - 16 * len(t2)) // 2, cy - 56, t2, CYAN, 2)
+    url = 'github.com/Prajwaljb/Synchora'
+    text((W - 16 * len(url)) // 2, cy + ch + 48, url, GRAY, 2)
 o.append('</svg>')
 open(out, 'w').write('\n'.join(o) + '\n')

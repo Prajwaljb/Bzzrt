@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <b>Diagnostics for variable refresh rate flicker, frame pacing and low framerate compensation.</b><br>
-  For FreeSync, G-SYNC Compatible, VESA Adaptive-Sync, HDMI VRR and ProMotion displays.
+  <b>Find the source of variable refresh rate flicker: frame pacing, low framerate compensation or the panel itself.</b><br>
+  FreeSync · G-SYNC Compatible · VESA Adaptive-Sync · HDMI VRR · ProMotion
 </p>
 
 <p align="center">
