@@ -78,6 +78,7 @@ static Key keyFromVk(WPARAM vk) {
         case 'H': return Key::H;
         case 'L': return Key::L;
         case 'R': return Key::R;
+        case 'A': return Key::A;
         case 'K': return Key::K;
         case VK_OEM_4: return Key::LBracket;
         case VK_OEM_6: return Key::RBracket;

@@ -146,24 +146,64 @@ void App::resolveRange(bool force) {
     } else {
         edidVrrRange(e, dMin, dMax, dSrc);
     }
-    SavedRange saved;
-    const bool haveSaved = loadRange(key, saved);
-    vrrMin_ = cfg_.vrrMinHz > 0 ? cfg_.vrrMinHz : haveSaved ? saved.minHz : dMin;
-    vrrMax_ = cfg_.vrrMaxHz > 0 ? cfg_.vrrMaxHz : haveSaved ? saved.maxHz : dMax;
-    lfcFps_ = cfg_.lfcFps > 0 ? cfg_.lfcFps : haveSaved ? saved.lfcFps : 0;
+    detMin_ = dMin;
+    detMax_ = dMax;
+    detSource_ = dSrc;
+    haveManual_ = loadRange(key, manual_);
+    applyRange();
+    if (detectedKnown())
+        std::printf("VRR range detected: %.0f-%.0f Hz (%s), monitor key %s\n", detMin_, detMax_, detSource_.c_str(),
+                    key.c_str());
+    else
+        std::printf("VRR range: nothing detected for %s\n", key.c_str());
+    if (haveManual_)
+        std::printf("VRR range entered by you: %.0f-%.0f Hz (%s)\n", manual_.minHz, manual_.maxHz,
+                    manual_.useManual ? "in use" : "not in use");
+    if (rangeKnown()) std::printf("VRR range in use: %.0f-%.0f Hz (%s)\n", vrrMin_, vrrMax_, rangeSource_.c_str());
+    else std::printf("VRR range unknown: the check will ask for it\n");
+    std::fflush(stdout);
+}
+
+bool App::usingManual() const { return haveManual_ && (manual_.useManual || !detectedKnown()); }
+
+void App::applyRange() {
+    // The detected range and the user's entry are both kept; the user picks which one applies (A key).
+    // Command-line values override either.
+    const bool man = usingManual();
+    const double baseMin = man ? manual_.minHz : detMin_, baseMax = man ? manual_.maxHz : detMax_;
+    vrrMin_ = cfg_.vrrMinHz > 0 ? cfg_.vrrMinHz : baseMin;
+    vrrMax_ = cfg_.vrrMaxHz > 0 ? cfg_.vrrMaxHz : baseMax;
+    lfcFps_ = cfg_.lfcFps > 0 ? cfg_.lfcFps : man ? manual_.lfcFps : 0;
+    const std::string base = man ? std::string("entered by you") : detSource_;
     if (cfg_.vrrMinHz > 0 && cfg_.vrrMaxHz > 0) rangeSource_ = "command line";
-    else if (haveSaved && !rangeAnyFromCli_) rangeSource_ = "entered by you";
-    else if (rangeAnyFromCli_) rangeSource_ = "command line + " + (haveSaved ? std::string("entered by you") : dSrc);
-    else rangeSource_ = dSrc;
+    else if (rangeAnyFromCli_) rangeSource_ = "command line + " + base;
+    else rangeSource_ = base;
     if (!rangeKnown()) {
         vrrMin_ = vrrMax_ = 0;
         rangeSource_.clear();
     }
+    lowStatus_.clear();
     rebuildSteps();
-    if (rangeKnown())
-        std::printf("VRR range: %.0f-%.0f Hz (%s), monitor key %s\n", vrrMin_, vrrMax_, rangeSource_.c_str(), key.c_str());
-    else
-        std::printf("VRR range: unknown for %s; the check will ask for it\n", key.c_str());
+}
+
+void App::toggleRangeSource() {
+    if (!haveManual_) {
+        beginRangeEdit(false);
+        return;
+    }
+    if (!detectedKnown()) {
+        rangeNote_ = "Nothing was detected for this monitor, so your entry stays in use.";
+        return;
+    }
+    manual_.useManual = !manual_.useManual;
+    saveRange(rangeKey_, manual_);
+    cfg_.vrrMinHz = cfg_.vrrMaxHz = cfg_.lfcFps = 0;  // an explicit choice on screen replaces command-line values
+    rangeAnyFromCli_ = false;
+    applyRange();
+    results_.clear();
+    if (mode_ == Mode::Results) mode_ = Mode::Intro;
+    rangeNote_ = manual_.useManual ? "Using the range you entered." : "Using the detected range.";
+    std::printf("VRR range in use: %.0f-%.0f Hz (%s)\n", vrrMin_, vrrMax_, rangeSource_.c_str());
     std::fflush(stdout);
 }
 
@@ -573,9 +613,11 @@ void App::requestStart() {
 void App::beginRangeEdit(bool thenStart) {
     editField_ = 1;
     startAfterEdit_ = thenStart;
-    editMin_ = rangeKnown() ? fmt("%.0f", vrrMin_) : std::string();
-    editMax_ = rangeKnown() ? fmt("%.0f", vrrMax_) : std::string();
-    editLfc_ = lfcFps_ > 0 ? fmt("%.0f", lfcFps_) : std::string();
+    // Starts from the user's previous entry, else from the detected range.
+    const double mn = haveManual_ ? manual_.minHz : detMin_, mx = haveManual_ ? manual_.maxHz : detMax_;
+    editMin_ = mn > 0 ? fmt("%.0f", mn) : std::string();
+    editMax_ = mx > 0 ? fmt("%.0f", mx) : std::string();
+    editLfc_ = haveManual_ && manual_.lfcFps > 0 ? fmt("%.0f", manual_.lfcFps) : std::string();
     editError_.clear();
     guidedSignature_.clear();
 }
@@ -612,16 +654,13 @@ void App::handleRangeKey(const KeyEvent& k) {
             editField_ = 0;
             cfg_.vrrMinHz = cfg_.vrrMaxHz = cfg_.lfcFps = 0;  // the user's entry replaces command-line values
             rangeAnyFromCli_ = false;
-            SavedRange r{mn, mx, editLfc_.empty() ? 0.0 : lfc};
+            SavedRange r{mn, mx, editLfc_.empty() ? 0.0 : lfc, true};
             const std::string path = saveRange(rangeKey_, r);
-            vrrMin_ = mn;
-            vrrMax_ = mx;
-            lfcFps_ = r.lfcFps;
-            rangeSource_ = "entered by you";
+            manual_ = r;
+            haveManual_ = true;
+            applyRange();
             rangeNote_ = path.empty() ? "Range set for this session (it could not be saved)."
-                                      : "Range saved for this monitor in " + path;
-            lowStatus_.clear();
-            rebuildSteps();
+                                      : "Your range is saved for this monitor in " + path;
             results_.clear();
             if (mode_ == Mode::Results) mode_ = Mode::Intro;
             std::printf("VRR range set: %.0f-%.0f Hz, LFC threshold %s\n", mn, mx,
@@ -650,6 +689,9 @@ void App::handleGuidedKey(const KeyEvent& k) {
         case Key::Tab: leaveGuided(Mode::Advanced); break;
         case Key::R:
             if (mode_ != Mode::Step) beginRangeEdit(false);
+            break;
+        case Key::A:
+            if (mode_ != Mode::Step) toggleRangeSource();
             break;
         case Key::L:
             if (mode_ == Mode::Step || !platform_.canLimitRefresh()) break;
@@ -797,6 +839,10 @@ void App::writeReport() {
     lines.push_back("Output: " + dinfo_.outputName + " " + dinfo_.monitorName + " " + displayModeString(dinfo_));
     lines.push_back(fmt("VRR range: %.0f-%.0f Hz (%s)   Window: %s", vrrMin_, vrrMax_, rangeSource_.c_str(),
                         windowModeName(platform_.windowMode())));
+    lines.push_back("Detected: " + (detectedKnown() ? fmt("%.0f-%.0f Hz (%s)", detMin_, detMax_, detSource_.c_str())
+                                                    : std::string("nothing")) +
+                    "   Entered by you: " +
+                    (haveManual_ ? fmt("%.0f-%.0f Hz", manual_.minHz, manual_.maxHz) : std::string("none")));
     lines.push_back(fmt("Tested range: %.0f-%.0f Hz   LFC possible: %s   LFC threshold: %.0f FPS", rangeMin(),
                         rangeMax(), lfcPossible(rangeMin(), rangeMax()) ? "yes" : "no (max < 2 x min)",
                         lfcThreshold()));
@@ -849,9 +895,19 @@ void App::addRangeLines(const std::function<void(const std::string&, uint32_t)>&
         return;
     }
     const bool weak = rangeSource_ == "EDID range limits";
-    add(fmt("VRR range: %.0f-%.0f Hz (%s%s)   R to change", vrrMin_, vrrMax_, rangeSource_.c_str(),
+    add(fmt("VRR range in use: %.0f-%.0f Hz (%s%s)", vrrMin_, vrrMax_, rangeSource_.c_str(),
             weak ? " - check it against the spec sheet" : ""),
         weak ? kYellow : kGreen);
+    const bool man = usingManual();
+    const std::string det = detectedKnown() ? fmt("%.0f-%.0f Hz (%s)", detMin_, detMax_, detSource_.c_str())
+                                            : std::string("nothing");
+    const std::string mine = haveManual_ ? fmt("%.0f-%.0f Hz", manual_.minHz, manual_.maxHz) : std::string("none");
+    add(fmt("   %s detected: %s", !man ? ">" : " ", det.c_str()), !man ? kWhite : kGray);
+    add(fmt("   %s your entry: %s", man ? ">" : " ", mine.c_str()), man ? kWhite : kGray);
+    if (haveManual_ && detectedKnown())
+        add("   A switch between them   R edit your entry", kGray);
+    else
+        add(haveManual_ ? "   R edit your entry" : "   R enter your own range (e.g. from the spec sheet)", kGray);
     if (modeLimited())
         add(fmt("The display runs at %.0f Hz, so only %.0f-%.0f Hz of the range is used. Set it to %.0f Hz in the "
                 "display settings for the full check.",
@@ -875,7 +931,9 @@ void App::addEditorLines(const std::function<void(const std::string&, uint32_t)>
         add(std::string(active ? "> " : "  ") + label + v + (active ? "_" : "") + (active ? hint : ""),
             active ? kYellow : kWhite);
     };
-    add(startAfterEdit_ ? "Before the check: enter the monitor's VRR range." : "Change the monitor's VRR range.", kWhite);
+    add(startAfterEdit_ ? "Before the check: enter the monitor's VRR range."
+                        : "Your own VRR range for this monitor. The detected range is kept; A switches between them.",
+        kWhite);
     add("You find it in the monitor's manual or spec sheet (\"FreeSync range\", \"Adaptive-Sync 48-144 Hz\"), in "
         "AMD Software (Display tab), or in reviews of the monitor. If it only lists a maximum refresh rate, 48 Hz is "
         "the most common minimum.",
@@ -965,7 +1023,7 @@ void App::buildGuidedOverlay(int64_t now) {
         else if (cfg_.doubleFrames)
             add("--double-frames is not available with this graphics backend; this run shows frames normally.", kRed);
         add("");
-        add(rangeKnown() ? "ENTER start    R VRR range    TAB advanced mode    Q quit"
+        add(rangeKnown() ? "ENTER start    TAB advanced mode    Q quit"
                          : "ENTER / R enter the VRR range    TAB advanced mode    Q quit",
             kWhite);
     } else if (mode_ == Mode::Step) {
@@ -1055,7 +1113,7 @@ void App::buildGuidedOverlay(int64_t now) {
             add("");
         }
         if (!reportPath_.empty()) add("Report saved: " + reportPath_, kGray);
-        add("ENTER run again    R VRR range    TAB advanced mode    Q quit", kWhite);
+        add("ENTER run again    R / A VRR range    TAB advanced mode    Q quit", kWhite);
     }
 
     // Lay out with the largest text size that fits on screen.

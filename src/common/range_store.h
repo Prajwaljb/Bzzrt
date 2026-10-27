@@ -7,7 +7,8 @@ namespace vrr {
 
 struct SavedRange {
     double minHz = 0, maxHz = 0;
-    double lfcFps = 0;  // 0 = automatic
+    double lfcFps = 0;       // 0 = automatic
+    bool useManual = true;   // false: the user switched back to the detected range but kept this entry
 };
 
 // Per-user settings directory: $XDG_CONFIG_HOME/synchora, %APPDATA%\Synchora or

@@ -95,6 +95,7 @@ void TtyInput::poll(std::vector<KeyEvent>& keys) {
                     case 'h': k = Key::H; break;
                     case 'l': k = Key::L; break;
                     case 'r': k = Key::R; break;
+                    case 'a': k = Key::A; break;
                     case 'k': k = Key::K; break;
                     case 'y': k = Key::Y; break;
                     case 'n': k = Key::N; break;

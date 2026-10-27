@@ -22,7 +22,8 @@ std::string storePath() {
     return dir.empty() ? std::string() : (fs::path(dir) / "ranges.txt").string();
 }
 
-// One monitor per line: key, minimum Hz, maximum Hz, LFC threshold FPS (0 = automatic).
+// One monitor per line: key, minimum Hz, maximum Hz, LFC threshold FPS (0 = automatic), "manual" or "auto"
+// (which range is in use; older files have no fifth column and mean "manual").
 std::vector<std::pair<std::string, SavedRange>> readAll() {
     std::vector<std::pair<std::string, SavedRange>> out;
     std::ifstream f(storePath());
@@ -33,7 +34,9 @@ std::vector<std::pair<std::string, SavedRange>> readAll() {
         std::string key;
         SavedRange r;
         if (is >> key >> r.minHz >> r.maxHz) {
+            std::string use;
             if (!(is >> r.lfcFps)) r.lfcFps = 0;
+            else if (is >> use) r.useManual = use != "auto";
             if (r.minHz > 0 && r.maxHz > r.minHz) out.push_back({key, r});
         }
     }
@@ -82,8 +85,11 @@ std::string saveRange(const std::string& monitorKey, const SavedRange& r) {
     fs::create_directories(fs::path(path).parent_path(), ec);
     std::ofstream f(path, std::ios::trunc);
     if (!f) return {};
-    f << "# Synchora: VRR range per monitor (key min_hz max_hz lfc_threshold_fps, 0 = automatic)\n";
-    for (const auto& [key, v] : all) f << key << ' ' << v.minHz << ' ' << v.maxHz << ' ' << v.lfcFps << '\n';
+    f << "# Synchora: VRR range entered per monitor (key min_hz max_hz lfc_threshold_fps use)\n"
+         "# lfc_threshold_fps 0 = automatic; use = manual (this entry) or auto (the detected range)\n";
+    for (const auto& [key, v] : all)
+        f << key << ' ' << v.minHz << ' ' << v.maxHz << ' ' << v.lfcFps << ' ' << (v.useManual ? "manual" : "auto")
+          << '\n';
     return f ? path : std::string();
 }
 

@@ -130,18 +130,23 @@ and 37 % below it, and frame rates crossing it.
 
 ### The monitor's VRR range
 
-The range is taken from, in this order:
+The start screen shows two ranges side by side, and you choose which one the check uses:
 
-1. `--vrr-min HZ --vrr-max HZ` on the command line;
-2. the range you entered for this monitor earlier (remembered per monitor in `~/.config/synchora/ranges.txt`,
-   `%APPDATA%\Synchora\ranges.txt` or `~/Library/Application Support/Synchora/ranges.txt`);
-3. the monitor's EDID: the FreeSync data block, the DisplayID Adaptive-Sync block, the HDMI VRR range, or the
-   display range limits (Linux: sysfs / X11 RandR / KMS; Windows: the monitor's registry key), or the range macOS
-   reports for the display;
-4. otherwise the check **asks before it starts**: type the minimum, ENTER, the maximum, ENTER. The range is in the
-   monitor's spec sheet ("FreeSync range 48-144 Hz"); if only the maximum is listed, 48 Hz is the most common minimum.
+* **Detected**: read from the monitor's EDID (the FreeSync data block, the DisplayID Adaptive-Sync block, the HDMI VRR
+  range, or the display range limits; Linux: sysfs / X11 RandR / KMS, Windows: the monitor's registry key) or the
+  range macOS reports for the display.
+* **Your entry**: press **R** and type the minimum, ENTER, the maximum, ENTER (and optionally the LFC threshold).
+  The range is in the monitor's spec sheet ("FreeSync range 48-144 Hz"); if only the maximum is listed, 48 Hz is the
+  most common minimum.
 
-Press **R** on the start screen to correct it at any time. The start screen also says whether **LFC is possible**:
+**A** switches between them. Entering a range selects it; the detected one is never thrown away. Both, and your
+choice, are remembered per monitor in `~/.config/synchora/ranges.txt`, `%APPDATA%\Synchora\ranges.txt` or
+`~/Library/Application Support/Synchora/ranges.txt`. If nothing is detected and you have not entered a range, the check
+**asks before it starts**. `--vrr-min HZ --vrr-max HZ` on the command line override both.
+
+Why keep both: detection is not always right. The EDID range limits are not necessarily the VRR range, monitors with
+"FreeSync Standard / Extended" modes often report the same EDID for both, HDMI and DisplayPort can have different
+ranges, adapters and docks can rewrite the EDID, and laptop panels usually report nothing. The start screen also says whether **LFC is possible**:
 frame doubling needs the maximum to be at least twice the minimum (48-144 Hz yes, 48-75 Hz no). With a narrow range,
 flicker below the minimum is a limit of the monitor and the conclusion says so. If the display mode runs below the
 monitor's maximum (e.g. a 144 Hz monitor set to 60 Hz), the check uses the reduced range and tells you to raise it.
@@ -175,7 +180,7 @@ LFC threshold two or more times at even intervals (45 FPS as 90 even refreshes),
 Each repeat is a real present, and the report says how many landed on time. If the steps below the minimum stop
 flickering, the missing frame doubling of the driver is the cause, not the monitor: `vrrdiag --double-frames --check`.
 
-The result is also saved as `vrrdiag-report-<date>.txt` next to the per-test CSV logs. **R** sets the VRR range,
+The result is also saved as `vrrdiag-report-<date>.txt` next to the per-test CSV logs. **R** / **A** enter or switch the VRR range,
 **H** hides the text, **LEFT/RIGHT** change the pattern, **F** toggles fullscreen, **ESC** cancels, **TAB** opens the
 advanced test bench.
 

@@ -12,6 +12,7 @@
 #include "csv_log.h"
 #include "guided.h"
 #include "overlay.h"
+#include "range_store.h"
 #include "scheduler.h"
 #include "stats.h"
 
@@ -42,6 +43,10 @@ private:
     // VRR range: command line > entered by the user (remembered per monitor) > EDID / OS > unknown (asked).
     void resolveRange(bool force = false);
     bool rangeKnown() const { return vrrMin_ > 0 && vrrMax_ > vrrMin_; }
+    bool detectedKnown() const { return detMin_ > 0 && detMax_ > detMin_; }
+    bool usingManual() const;
+    void applyRange();
+    void toggleRangeSource();
     double rangeMin() const;      // fallbacks keep the advanced bench usable while the range is unknown
     double rangeMax() const;      // effective maximum: limited by the display mode and the low-refresh test
     double lfcThreshold() const;  // frame rate below which frames should be shown several times
@@ -100,8 +105,12 @@ private:
     int64_t lastDispNs_ = 0;
 
     // VRR range
-    double vrrMin_ = 0, vrrMax_ = 0, lfcFps_ = 0;
+    double vrrMin_ = 0, vrrMax_ = 0, lfcFps_ = 0;  // the range in use
     std::string rangeSource_;
+    double detMin_ = 0, detMax_ = 0;  // detected from the EDID / OS, 0 = nothing detected
+    std::string detSource_;
+    SavedRange manual_;               // the user's entry for this monitor
+    bool haveManual_ = false;
     std::string rangeKey_;
     bool rangeResolved_ = false;
     bool rangeAnyFromCli_ = false;

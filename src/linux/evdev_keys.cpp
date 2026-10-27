@@ -28,6 +28,7 @@ Key keyFromEvdev(uint32_t code) {
         case KEY_H: return Key::H;
         case KEY_L: return Key::L;
         case KEY_R: return Key::R;
+        case KEY_A: return Key::A;
         case KEY_K: return Key::K;
         case KEY_LEFTBRACE: return Key::LBracket;
         case KEY_RIGHTBRACE: return Key::RBracket;

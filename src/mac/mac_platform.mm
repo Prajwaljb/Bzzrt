@@ -79,6 +79,7 @@ static Key keyFromEvent(NSEvent* e) {
         case 'h': return Key::H;
         case 'l': return Key::L;
         case 'r': return Key::R;
+        case 'a': return Key::A;
         case 'k': return Key::K;
         case 'y': return Key::Y;
         case 'n': return Key::N;

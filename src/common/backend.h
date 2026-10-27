@@ -14,7 +14,7 @@ const char* windowModeName(WindowMode m);
 enum class Key {
     None, Space, Up, Down, Left, Right, PageUp, PageDown, Plus, Minus,
     Fullscreen, V, P, G, C, H, L, R, K, LBracket, RBracket, Escape, Q,
-    Y, N, S, Enter, Tab, Backspace,
+    Y, N, S, A, Enter, Tab, Backspace,
     D0, D1, D2, D3, D4, D5, D6, D7, D8, D9  // keep contiguous: digit = key - D0
 };
 

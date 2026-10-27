@@ -14,9 +14,10 @@ Works with FreeSync, Adaptive-Sync, G-SYNC Compatible, HDMI VRR and ProMotion di
    Windows: double-click vrrdiag.exe there.  Linux: run ./vrrdiag-launch.
    macOS: open Synchora.app. The first time, right-click it and choose Open (macOS 15:
    System Settings > Privacy & Security > Open Anyway), because it is not notarized.
-3. Read the start screen. It shows the monitor's VRR range, read from the monitor itself.
-   If it says UNKNOWN, press ENTER and type the range from the monitor's spec sheet
-   (e.g. 48, ENTER, 144, ENTER, ENTER). It is remembered. R changes it later.
+3. Read the start screen. It shows the VRR range detected from the monitor and, if you
+   entered one, your own range. If the detected one is wrong (check the spec sheet), press
+   R and type yours (e.g. 48, ENTER, 144, ENTER, ENTER). A switches between the two.
+   Both are remembered. If nothing was detected, ENTER asks for the range first.
    Yellow lines are setup problems worth fixing first.
 4. Press ENTER. Eight 10-second tests follow on a dark gray screen.
    For each one press  Y = I see flicker,  N = no flicker,  S = not sure.
@@ -25,7 +26,8 @@ Works with FreeSync, Adaptive-Sync, G-SYNC Compatible, HDMI VRR and ProMotion di
    computer's graphics driver. It is also saved as vrrdiag-report-<date>.txt
    (macOS: in Documents/Synchora).
 
-Keys: F = windowed / fullscreen (/ exclusive on Windows), R = VRR range, H = hide text,
+Keys: F = windowed / fullscreen (/ exclusive on Windows), R = enter your VRR range,
+      A = detected / your range, H = hide text,
       LEFT/RIGHT = change pattern, ESC = cancel, TAB = advanced test bench, Q = quit.
 
 If the result says "VRR WAS NOT ACTIVE": check step 1, keep the app fullscreen, and on
