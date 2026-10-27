@@ -16,6 +16,14 @@ MetalBackend::~MetalBackend() {
         [cb commit];
         [cb waitUntilCompleted];
     }
+    // libdispatch aborts if a semaphore is released below its initial value: take every slot (completion handlers
+    // may still be returning them), then give them all back.
+    if (inFlight_) {
+        int taken = 0;
+        for (int i = 0; i < kInFlight; ++i)
+            if (dispatch_semaphore_wait(inFlight_, dispatch_time(DISPATCH_TIME_NOW, 1000000000LL)) == 0) ++taken;
+        for (int i = 0; i < taken; ++i) dispatch_semaphore_signal(inFlight_);
+    }
 }
 
 bool MetalBackend::init(MacPlatform& platform, const Config& cfg, const ImageData& image, std::string& err) {
@@ -28,6 +36,7 @@ bool MetalBackend::init(MacPlatform& platform, const Config& cfg, const ImageDat
         device_ = all[static_cast<NSUInteger>(cfg.gpuIndex)];
     } else {
         device_ = MTLCreateSystemDefaultDevice();
+        if (!device_ && all.count > 0) device_ = all[0];
     }
     if (!device_) return err = "no Metal device", false;
     queue_ = [device_ newCommandQueue];
@@ -165,15 +174,16 @@ PresentOutcome MetalBackend::present(uint64_t frameIndex) {
     @autoreleasepool {
         id<CAMetalDrawable> d = pending_;
         pending_ = nil;
+        std::shared_ptr<TimingState> state = timing_;
         [d addPresentedHandler:^(id<MTLDrawable> dr) {
           // presentedTime is in the CACurrentMediaTime / mach_absolute_time domain, like nowNs(); 0 = dropped.
           const CFTimeInterval t = dr.presentedTime;
-          std::lock_guard<std::mutex> lk(timingMutex_);
+          std::lock_guard<std::mutex> lk(state->mutex);
           if (t > 0) {
-              timing_.push_back({frameIndex, static_cast<int64_t>(t * 1e9)});
-              ++presented_;
+              state->samples.push_back({frameIndex, static_cast<int64_t>(t * 1e9)});
+              ++state->presented;
           } else {
-              ++dropped_;
+              ++state->dropped;
           }
         }];
         // An empty command buffer on the same queue presents after the frame's rendering, right now.
@@ -185,10 +195,10 @@ PresentOutcome MetalBackend::present(uint64_t frameIndex) {
 }
 
 void MetalBackend::pollTiming(std::vector<DisplayTimingSample>& out) {
-    std::lock_guard<std::mutex> lk(timingMutex_);
-    if (!timing_.empty()) lastTimingNs_ = nowNs();
-    out.insert(out.end(), timing_.begin(), timing_.end());
-    timing_.clear();
+    std::lock_guard<std::mutex> lk(timing_->mutex);
+    if (!timing_->samples.empty()) lastTimingNs_ = nowNs();
+    out.insert(out.end(), timing_->samples.begin(), timing_->samples.end());
+    timing_->samples.clear();
 }
 
 std::vector<PresentModeInfo> MetalBackend::presentModes() const {
@@ -214,10 +224,11 @@ BackendInfo MetalBackend::info() {
     b.width = static_cast<int>(layer_.drawableSize.width);
     b.height = static_cast<int>(layer_.drawableSize.height);
     {
-        std::lock_guard<std::mutex> lk(timingMutex_);
+        std::lock_guard<std::mutex> lk(timing_->mutex);
         char buf[128];
         std::snprintf(buf, sizeof buf, "drawables presented %llu, dropped %llu",
-                      static_cast<unsigned long long>(presented_), static_cast<unsigned long long>(dropped_));
+                      static_cast<unsigned long long>(timing_->presented),
+                      static_cast<unsigned long long>(timing_->dropped));
         b.notes.push_back(buf);
     }
     double lo = 0, hi = 0;

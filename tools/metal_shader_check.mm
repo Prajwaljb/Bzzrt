@@ -8,10 +8,12 @@
 
 int main() {
     @autoreleasepool {
+        // Command-line tools may get no default device; any device can compile the shader.
         id<MTLDevice> dev = MTLCreateSystemDefaultDevice();
+        if (!dev) dev = MTLCopyAllDevices().firstObject;
         if (!dev) {
-            std::printf("no Metal device; skipped\n");
-            return 0;
+            std::printf("no Metal device\n");
+            return 1;
         }
         NSError* e = nil;
         id<MTLLibrary> lib = [dev newLibraryWithSource:[NSString stringWithUTF8String:kPatternMetal]

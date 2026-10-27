@@ -1,6 +1,13 @@
-# vrrdiag: native VRR / LFC flicker diagnostic
+# Synchora (`vrrdiag`): VRR / FreeSync / G-SYNC flicker and LFC diagnostic
 
-`vrrdiag` generates **controlled presentation timing** (exact frame intervals, scripted
+Does VRR flicker come from your monitor or from your computer? Synchora runs a guided 2-minute check on any
+Adaptive-Sync, FreeSync, G-SYNC Compatible, HDMI VRR or ProMotion display, on **Windows, Linux and macOS**, and tells you.
+
+**Download:** [latest release](https://github.com/Prajwaljb/Synchora/releases/latest): `windows-x64.zip`,
+`linux-x86_64.tar.gz` or `macos-arm64.zip`. Unpack, start it on the monitor you want to test and press ENTER
+(see [QUICKSTART](packaging/QUICKSTART.txt)).
+
+Under the hood `vrrdiag` generates **controlled presentation timing** (exact frame intervals, scripted
 rate switches, frame-time spikes and jitter) so you can find out whether VRR flicker comes from:
 
 * low framerate compensation (LFC, frame multiplication below the VRR floor),
@@ -15,6 +22,7 @@ It is a native application:
 | Windows 10/11 | **Direct3D 12** (default), Direct3D 11 fallback | DXGI flip model (`FLIP_DISCARD`), `ALLOW_TEARING`, frame-latency waitable |
 | Linux | **Vulkan WSI** on Wayland or X11 | FIFO / FIFO_RELAXED / MAILBOX / IMMEDIATE, `VK_KHR_present_id` + `VK_KHR_present_wait`, `VK_GOOGLE_display_timing` |
 | Linux (advanced) | **Direct DRM/KMS** from a text console | atomic page flips with `VRR_ENABLED` controlled by the app, kernel flip timestamps |
+| macOS 12+ (Apple silicon) | **Metal** on a `CAMetalLayer` | native fullscreen, `displaySyncEnabled`, `MTLDrawable.presentedTime` |
 
 > **Software cannot prove that the monitor is in VRR or LFC.** The app knows exactly when it
 > *submitted* each frame and, where the driver exposes it, when the OS/driver says the frame was
@@ -73,6 +81,15 @@ Wayland, X11 and DRM/KMS support are each enabled automatically when their devel
 (`-DVRRDIAG_WAYLAND=OFF`, `-DVRRDIAG_X11=OFF` and `-DVRRDIAG_KMS=OFF` disable them). If `glslangValidator` is missing, the
 pre-compiled SPIR-V in `shaders/prebuilt/` is used.
 
+### macOS (Xcode command line tools)
+
+```bash
+./package-macos.sh                 # dist/macos/Synchora.app (arm64, macOS 12+)
+ARCHS="arm64;x86_64" ./package-macos.sh   # universal build for Intel Macs too
+```
+
+The Metal shader is compiled at runtime; `build-mac/metal_shader_check` compiles it ahead of time to catch errors.
+
 ### Packaged app
 
 | Platform | Command | Result |
@@ -80,6 +97,8 @@ pre-compiled SPIR-V in `shaders/prebuilt/` is used.
 | Linux | `./package-linux.sh` | `dist/linux/` with `vrrdiag`, `vrrdiag-launch` (writes logs to `~/vrrdiag-logs`), docs and icon |
 | Linux | `./package-linux.sh --install` | also installs `~/.local/bin/vrrdiag{,-launch}` and a "VRR/LFC Diagnostic" app-menu entry (right-click it for "Advanced test bench" and "Start windowed") |
 | Windows | double-click `build-windows.bat` (needs VS 2022 with the C++ workload, and CMake) | `dist\windows\vrrdiag.exe`, a single self-contained file. When double-clicked it writes CSV logs next to itself. |
+| macOS | `./package-macos.sh` | `dist/macos/Synchora.app`, ad-hoc signed. Logs go to `~/Documents/Synchora` when started from Finder. |
+| All three | push to GitHub | `.github/workflows/build.yml` builds and uploads all three packages |
 | Windows from Linux | `cmake -S . -B build-win -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64-x86_64.cmake && cmake --build build-win` | `build-win/vrrdiag.exe` (needs `mingw-w64-gcc` or llvm-mingw on `PATH`) |
 
 To uninstall the Linux menu entry, delete `~/.local/bin/vrrdiag`, `~/.local/bin/vrrdiag-launch`,
@@ -91,17 +110,44 @@ To uninstall the Linux menu entry, delete `~/.local/bin/vrrdiag`, `~/.local/bin/
 
 ### Guided flicker check (default)
 
-Start `vrrdiag` (or "VRR/LFC Diagnostic" from the app menu, or double-click `vrrdiag.exe` on Windows) and press
-**ENTER**, or start it with `vrrdiag --check` to begin right away. Eight 10-second tests run one after another on a dark gray screen. During each one press **Y** if you
-see flicker, **N** if you don't, **S** if unsure. The test advances on its own.
+Start `vrrdiag` (or "VRR/LFC Diagnostic" from the app menu, double-click `vrrdiag.exe` on Windows, or open
+`Synchora.app` on macOS) and press **ENTER**, or start it with `vrrdiag --check` to begin right away. Eight 10-second
+tests run one after another on a dark gray screen. During each one press **Y** if you see flicker, **N** if you
+don't, **S** if unsure. The test advances on its own.
+
+The tests are built from **your monitor's VRR range** (see below). For a 48-200 Hz monitor they are:
 
 | # | Test | Why |
 |---|---|---|
-| 1-3 | 90 / 60 / 50 FPS steady | inside the VRR range: must look perfectly stable |
+| 1-3 | 90 / 60 / 50 FPS steady | inside the VRR range: must look perfectly stable; 50 is just above the minimum |
 | 4 | random 55-80 FPS | rate changes inside the range |
-| 5-6 | 45 / 30 FPS steady | below the 48 Hz floor: needs frame doubling (LFC) |
-| 7 | 60 <-> 45 FPS every second | crossing the floor, the classic flicker trigger |
-| 8 | random 45-55 FPS | jitter around the floor |
+| 5-6 | 45 / 30 FPS steady | below the 48 Hz minimum: needs frame doubling (LFC) |
+| 7 | 60 <-> 45 FPS every second | crossing the minimum, the classic flicker trigger |
+| 8 | random 45-55 FPS | jitter around the minimum |
+
+A 40-144 Hz monitor gets 90 / 60 / 42 / 46-65 / 38 / 25 FPS and so on: always in range, just above the minimum, 6 %
+and 37 % below it, and frame rates crossing it.
+
+### The monitor's VRR range
+
+The range is taken from, in this order:
+
+1. `--vrr-min HZ --vrr-max HZ` on the command line;
+2. the range you entered for this monitor earlier (remembered per monitor in `~/.config/synchora/ranges.txt`,
+   `%APPDATA%\Synchora\ranges.txt` or `~/Library/Application Support/Synchora/ranges.txt`);
+3. the monitor's EDID: the FreeSync data block, the DisplayID Adaptive-Sync block, the HDMI VRR range, or the
+   display range limits (Linux: sysfs / X11 RandR / KMS; Windows: the monitor's registry key), or the range macOS
+   reports for the display;
+4. otherwise the check **asks before it starts**: type the minimum, ENTER, the maximum, ENTER. The range is in the
+   monitor's spec sheet ("FreeSync range 48-144 Hz"); if only the maximum is listed, 48 Hz is the most common minimum.
+
+Press **R** on the start screen to correct it at any time. The start screen also says whether **LFC is possible**:
+frame doubling needs the maximum to be at least twice the minimum (48-144 Hz yes, 48-75 Hz no). With a narrow range,
+flicker below the minimum is a limit of the monitor and the conclusion says so. If the display mode runs below the
+monitor's maximum (e.g. a 144 Hz monitor set to 60 Hz), the check uses the reduced range and tells you to raise it.
+
+`--lfc-threshold FPS` (or the third field of the range editor) sets the frame rate below which frames are expected to
+be shown several times; the default is 1.1 x the minimum.
 
 For every test the app also measures, from the driver's presentation timestamps, whether frames reached the screen
 at the requested times (**EVEN**), irregularly (**UNEVEN**), or snapped to the fixed refresh rate (**FIXED
@@ -117,14 +163,21 @@ refresh rate high, so 90 FPS can read 180 Hz and 45 FPS can read 90 or 180 Hz. T
 reading stuck at the fixed refresh rate (e.g. 200 Hz at 90 FPS) means VRR is off. The app explains each reading.
 
 **Low-refresh test (Windows).** Windows drivers often repeat frames (e.g. 45 FPS shown at 135-180 Hz), which keeps
-the panel far from its 48 Hz minimum, so a normal Windows run cannot reproduce flicker that happens near the minimum.
-Press **L** on the start screen to run the check in a 60 Hz exclusive-fullscreen display mode instead: with VRR the
-refresh rate can only stretch below the mode's rate, so the ceiling becomes 60 Hz, frames below 48 FPS cannot be
-repeated, and the monitor runs at its minimum like it does on Linux. If it flickers there too, the flicker is the
-monitor's behaviour at very low refresh rates; if not, the Linux flicker comes from the Linux side.
+the panel far from its minimum, so a normal Windows run cannot reproduce flicker that happens near the minimum.
+Press **L** on the start screen to run the check in an exclusive-fullscreen display mode below twice the minimum
+(60 Hz for a 48 Hz minimum, chosen from the modes the display offers): the VRR ceiling drops to that rate, frames below
+the minimum cannot be repeated, and the monitor runs at its minimum like it does with drivers that lack LFC (e.g.
+Linux on Intel). If it flickers there too, the flicker is the monitor's behaviour at very low refresh rates; if not,
+the flicker seen elsewhere comes from that system's driver.
 
-The result is also saved as `vrrdiag-report-<date>.txt` next to the per-test CSV logs. **H** hides the text,
-**LEFT/RIGHT** change the pattern, **F** toggles fullscreen, **ESC** cancels, **TAB** opens the advanced test bench.
+**Frame doubling experiment (all platforms).** `--double-frames` makes the app itself show every frame slower than the
+LFC threshold two or more times at even intervals (45 FPS as 90 even refreshes), the way a driver with LFC would.
+Each repeat is a real present, and the report says how many landed on time. If the steps below the minimum stop
+flickering, the missing frame doubling of the driver is the cause, not the monitor: `vrrdiag --double-frames --check`.
+
+The result is also saved as `vrrdiag-report-<date>.txt` next to the per-test CSV logs. **R** sets the VRR range,
+**H** hides the text, **LEFT/RIGHT** change the pattern, **F** toggles fullscreen, **ESC** cancels, **TAB** opens the
+advanced test bench.
 
 ### Advanced test bench
 
@@ -139,7 +192,8 @@ vrrdiag --list-tests
 ```
 
 Linux specific: `--wsi wayland|x11`, `--api kms`, `--gpu N` (hybrid laptops: pick the GPU that drives the monitor).
-Windows specific: `--api d3d11`, `--exclusive`, `--gpu N`.
+Windows specific: `--api d3d11`, `--exclusive`, `--gpu N`. macOS: `--gpu N` (Metal device index).
+Everywhere: `--vrr-min`, `--vrr-max`, `--lfc-threshold`, `--double-frames`, `--version`.
 
 ### Keys
 
@@ -166,7 +220,7 @@ Windows specific: `--api d3d11`, `--exclusive`, `--gpu N`.
 |---|---|
 | `stable200` … `stable30` | 200, 144, 120, 100, 60, 55, 50, 48, 47, 45, 40, 30 FPS |
 | `custom` | stable FPS set with `+`/`-` or `--fps` |
-| `lfc50`, `lfc47` | stable 50 FPS (just above the 48 Hz floor) / 47 FPS (just below) |
+| `lfc50`, `lfc47` | stable 50 FPS (just above a 48 Hz floor) / 47 FPS (just below); use `--fps` for other floors |
 | `sweep` | smooth 45 → 55 → 45 FPS triangle sweep (`--sweep-period`) |
 | `switch47-50` | 50 ↔ 47 FPS every `--switch-period` seconds |
 | `switch60-45`, `switch100-45`, `switch200-45` | X → 45 → X FPS |
@@ -192,11 +246,11 @@ API, GPU, output name/monitor, nominal mode and refresh rate, window mode, swap-
 tearing support, whether driver presentation timing is available, the test, target FPS, measured FPS (last 1 s),
 current/average frame time, 1 % and 0.1 % lows, the largest spike, frames slower than the VRR floor and the number of
 floor crossings, `Present`/`vkQueuePresentKHR` call duration and status, driver-reported present intervals, and a
-present-interval histogram with the 200 Hz ceiling and the 48 Hz floor marked.
+present-interval histogram with the VRR maximum and minimum (the floor) marked, and the VRR range in use.
 
 Definitions: *1 % low* = 1000 / (99th-percentile frame time); *0.1 % low* = 1000 / (99.9th-percentile frame time).
 *Frame time* = interval between consecutive present calls. *Floor crossing* = a frame on the other side of
-1000/48 ms than the frame before it.
+1000 / VRR minimum ms than the frame before it.
 
 ---
 
@@ -233,7 +287,8 @@ The compositor decides whether VRR is used. There is no Wayland protocol that re
 | Compositor | Setting |
 |---|---|
 | KDE Plasma (KWin) | System Settings → Display & Monitor → *Adaptive sync*: **Automatic** (fullscreen apps only) or **Always** |
-| GNOME (Mutter 46+) | `gsettings set org.gnome.mutter experimental-features "['variable-refresh-rate']"`, then Settings → Displays → *Variable Refresh Rate* |
+| GNOME 50+ | Settings → Displays → *Variable Refresh Rate* |
+| GNOME 46-49 | `gsettings set org.gnome.mutter experimental-features "['variable-refresh-rate']"`, then Settings → Displays → *Variable Refresh Rate* |
 | Hyprland | `misc { vrr = 2 }` (fullscreen only) or `vrr = 1` (always) |
 | Sway | `output <name> adaptive_sync on` |
 
@@ -279,11 +334,20 @@ cd ~/Code/VRR && ./build/vrrdiag --api kms --test switch47-50 --start
   limits, `vrr_capable` and `max bpc`.
 * Drawing is done by the CPU. At 200 FPS, hide the overlay (`H`) to avoid late frames.
 * Flip timestamps show when *our* flips were latched. They do not show any extra (LFC) scanouts the hardware inserts.
-* `--double-frames` is an experiment for drivers without frame doubling (LFC). The app itself shows every frame slower
-  than ~53 FPS two or more times at even intervals, e.g. 45 FPS as 90 even refreshes, the way a driver with LFC would.
-  Each repeat is a real page flip, and the report says how many landed on time. If the steps below the VRR minimum
-  stop flickering, the missing frame doubling is the cause, not the monitor:
+* `--double-frames` here gives the cleanest result, since every repeat is a page flip with no compositor in between:
   `vrrdiag-launch --api kms --double-frames --check`
+
+### macOS
+
+* Apple silicon Macs with macOS 14+ support Adaptive-Sync monitors: System Settings → Displays → the monitor →
+  *Refresh Rate* = **Variable (48-144 Hz)** (the range shown is the monitor's). MacBook Pro ProMotion panels are
+  variable by default. The check reads the range macOS reports; with a fixed refresh rate it asks for the range and
+  warns that macOS is not using VRR.
+* macOS only uses variable refresh for **fullscreen** apps: the check starts in native fullscreen (`F` toggles it).
+* Timing comes from `MTLDrawable.presentedTime`, in the same clock as the app's own timestamps.
+* The app is ad-hoc signed but not notarized. On first start, right-click `Synchora.app` → *Open* (macOS 15: System
+  Settings → Privacy & Security → *Open Anyway*), or run `xattr -dr com.apple.quarantine Synchora.app`.
+* From a terminal: `Synchora.app/Contents/MacOS/vrrdiag --help`.
 
 ---
 
@@ -302,7 +366,7 @@ end. Use `pandas.read_csv(f, comment='#')`.
 | `present_call_ms` | time spent inside Present / vkQueuePresentKHR / atomic commit |
 | `present_status` | `S_OK`, `DXGI_STATUS_OCCLUDED`, `VK_SUCCESS`, `VK_SUBOPTIMAL_KHR`, `OK`, `EBUSY`, … |
 | `late` | 1 if Present was called > 0.2 ms after the scheduled time |
-| `below_vrr_floor` | 1 if the frame time exceeded 1000/48 ms (LFC territory) |
+| `below_vrr_floor` | 1 if the frame time exceeded 1000 / VRR minimum ms (LFC territory) |
 | `target_fps` | 1000 / target frame time |
 | `test_mode`, `window_mode`, `sync_mode`, `present_mode`, `color_format`, `display_mode` | state at that frame |
 | `display_time_s` | OS/driver-reported presentation time (empty if unavailable) |
@@ -311,23 +375,27 @@ end. Use `pandas.read_csv(f, comment='#')`.
 
 Timing sources: DXGI `GetFrameStatistics().SyncQPCTime` (Windows, mainly in independent flip / exclusive);
 `VK_GOOGLE_display_timing` `actualPresentTime`; `VK_KHR_present_wait` completion (polled, ±0.2 ms; on Wayland it is
-driven by the compositor's presentation feedback); KMS page-flip events. None of these observe the panel itself.
+driven by the compositor's presentation feedback); KMS page-flip events; `MTLDrawable.presentedTime` (macOS). None of
+these observe the panel itself.
 
 ---
 
 ## 5. How to use this to answer "is my monitor faulty?"
 
 See **[docs/VRR_LFC_GUIDE.md](docs/VRR_LFC_GUIDE.md)**. It covers the test procedure, why average FPS is not enough,
-why a single spike below 48 FPS can trigger LFC, why stable 47 FPS can behave differently from 47↔50 switching, how to
+why a single spike below the VRR minimum can trigger LFC, why stable 47 FPS can behave differently from 47↔50 switching, how to
 read the driver timing, and what can and cannot be proven without the OSD or a high-speed camera.
 
 ## Source layout
 
 ```
-src/common/   app loop, pacing, scheduler/tests, guided check, stats, overlay, CSV, patterns (CPU), config
+src/common/   app loop, pacing, scheduler/tests, guided check, VRR range (EDID parser, saved ranges), stats,
+              overlay, CSV, patterns (CPU), config
 src/win/      Win32 window, DXGI base, D3D12 backend, D3D11 backend
-src/linux/    Vulkan backend, Wayland and X11 windows, DRM/KMS backend, TTY input
-shaders/      pattern.hlsl (D3D), pattern.vert/.frag (Vulkan) + prebuilt SPIR-V
-packaging/    Linux desktop entry, launcher and icon
+src/linux/    Vulkan backend, Wayland and X11 windows, DRM/KMS backend, TTY input, sysfs EDID
+src/mac/      Cocoa window, Metal backend
+shaders/      pattern.hlsl (D3D), pattern.vert/.frag (Vulkan) + prebuilt SPIR-V, pattern.metal (Metal)
+packaging/    Linux desktop entry, launcher and icon; macOS Info.plist; QUICKSTART
+tools/        metal_shader_check (CI)
 cmake/        MinGW-w64 toolchain file for cross-compiling the Windows .exe
 ```

@@ -4,6 +4,7 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -54,10 +55,14 @@ private:
     bool want10_ = false, is10_ = false;
     int modeIdx_ = 0;
 
-    std::mutex timingMutex_;
-    std::vector<DisplayTimingSample> timing_;
+    // Filled by presented handlers, which can run after the backend is gone, so they share ownership.
+    struct TimingState {
+        std::mutex mutex;
+        std::vector<DisplayTimingSample> samples;
+        uint64_t presented = 0, dropped = 0;
+    };
+    std::shared_ptr<TimingState> timing_ = std::make_shared<TimingState>();
     int64_t lastTimingNs_ = 0;
-    uint64_t presented_ = 0, dropped_ = 0;
 };
 
 }  // namespace vrr
