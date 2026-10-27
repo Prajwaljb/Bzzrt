@@ -169,8 +169,9 @@ bool parseArgs(int argc, char** argv, Config& c, std::string& err) {
     }
     if (findTest(c.test) < 0) return err = "unknown test id: " + c.test + " (see --list-tests)", false;
     if (c.pattern < 0 || c.pattern >= kPatCount) return err = "bad --pattern", false;
-    if (c.vrrMinHz < 0 || c.vrrMaxHz < 0 || c.vrrMinHz > 1000 || c.vrrMaxHz > 1000 ||
-        (c.vrrMinHz > 0 && c.vrrMaxHz > 0 && c.vrrMaxHz <= c.vrrMinHz))
+    if (c.vrrMinHz < 0 || c.vrrMaxHz < 0 || c.vrrMinHz > 1000 || c.vrrMaxHz > 1000)
+        return err = "--vrr-min and --vrr-max must be between 1 and 1000 Hz", false;
+    if (c.vrrMinHz > 0 && c.vrrMaxHz > 0 && c.vrrMaxHz <= c.vrrMinHz)
         return err = "bad VRR range (--vrr-min must be below --vrr-max)", false;
     if (c.lfcFps < 0 || c.lfcFps > 1000) return err = "bad --lfc-threshold", false;
     if (c.idleFps <= 0) return err = "bad --idle-fps", false;

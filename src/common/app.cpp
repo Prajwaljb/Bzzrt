@@ -183,6 +183,13 @@ void App::applyRange() {
         rangeSource_.clear();
     }
     lowStatus_.clear();
+    // The low-refresh ceiling was chosen for the previous minimum; it must stay between 1.05x and 2x of the new one.
+    if (lowHz_ > 0 && (!rangeKnown() || lowHz_ < vrrMin_ * 1.05 || lowHz_ > vrrMin_ * 2 - 0.5)) {
+        platform_.setRefreshCeiling(0);
+        platform_.setWindowMode(WindowMode::Borderless);
+        lowHz_ = 0;
+        lowStatus_ = "The low-refresh test was switched off: its display mode does not fit the new range.";
+    }
     rebuildSteps();
 }
 
@@ -808,6 +815,8 @@ void App::finishStep() {
         startStep(stepIdx_ + 1);
     } else {
         mode_ = Mode::Results;
+        resultSteps_ = steps_;
+        resultCtx_ = checkContext();
         writeReport();
     }
 }
@@ -832,7 +841,7 @@ CheckContext App::checkContext() const {
 }
 
 void App::writeReport() {
-    const auto& steps = steps_;
+    const auto& steps = resultSteps_;
     std::vector<std::string> lines;
     lines.push_back(std::string("Synchora ") + kVersion + " VRR flicker check - " + wallClockStamp("%Y-%m-%d %H:%M:%S"));
     lines.push_back("System: " + binfo_.api + " (" + platform_.name() + "), GPU: " + binfo_.gpu);
@@ -874,7 +883,7 @@ void App::writeReport() {
     }
     lines.push_back("");
     lines.push_back("CONCLUSION");
-    for (const auto& c : guidedConclusion(steps, results_, checkContext())) lines.push_back("- " + c);
+    for (const auto& c : guidedConclusion(steps, results_, resultCtx_)) lines.push_back("- " + c);
 
     for (const auto& l : lines) std::printf("%s\n", l.c_str());
     std::fflush(stdout);
@@ -898,11 +907,12 @@ void App::addRangeLines(const std::function<void(const std::string&, uint32_t)>&
     add(fmt("VRR range in use: %.0f-%.0f Hz (%s%s)", vrrMin_, vrrMax_, rangeSource_.c_str(),
             weak ? " - check it against the spec sheet" : ""),
         weak ? kYellow : kGreen);
-    const bool man = usingManual();
+    const bool cli = cfg_.vrrMinHz > 0 || cfg_.vrrMaxHz > 0;  // the command line overrides both
+    const bool man = usingManual() && !cli, autoUsed = !usingManual() && !cli;
     const std::string det = detectedKnown() ? fmt("%.0f-%.0f Hz (%s)", detMin_, detMax_, detSource_.c_str())
                                             : std::string("nothing");
     const std::string mine = haveManual_ ? fmt("%.0f-%.0f Hz", manual_.minHz, manual_.maxHz) : std::string("none");
-    add(fmt("   %s detected: %s", !man ? ">" : " ", det.c_str()), !man ? kWhite : kGray);
+    add(fmt("   %s detected: %s", autoUsed ? ">" : " ", det.c_str()), autoUsed ? kWhite : kGray);
     add(fmt("   %s your entry: %s", man ? ">" : " ", mine.c_str()), man ? kWhite : kGray);
     if (haveManual_ && detectedKnown())
         add("   A switch between them   R edit your entry", kGray);
@@ -1103,12 +1113,12 @@ void App::buildGuidedOverlay(int64_t now) {
             if (r.verdict.timing == Timing::AppLate) c = kGray;
             if (r.answer == Answer::Yes) c = kYellow;
             const std::string osd = r.osdHz > 0 ? fmt("%d Hz", r.osdHz) : std::string("-");
-            add(fmt("%d %-24s %-13s %-11s %s", static_cast<int>(i + 1), steps[i].title.c_str(),
+            add(fmt("%d %-24s %-13s %-11s %s", static_cast<int>(i + 1), resultSteps_[i].title.c_str(),
                     timingLabel(r.verdict.timing), answerLabel(r.answer), osd.c_str()),
                 c);
         }
         add("");
-        for (const auto& p : guidedConclusion(steps, results_, checkContext())) {
+        for (const auto& p : guidedConclusion(resultSteps_, results_, resultCtx_)) {
             add(p);
             add("");
         }

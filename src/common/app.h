@@ -131,6 +131,9 @@ private:
     std::string lowStatus_;   // why the low-refresh test could not start
     std::vector<TimingSample> stepSamples_;
     std::vector<StepResult> results_;
+    // The finished run's steps and range: the live ones can change afterwards (another monitor, a new range).
+    std::vector<GuidedStep> resultSteps_;
+    CheckContext resultCtx_;
     std::string reportPath_;
     std::string logPrefix_;
     std::string logId_;  // overrides the test id in CSV file names (guided steps with custom parameters)
