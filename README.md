@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <b>Find the source of variable refresh rate flicker: frame pacing, low framerate compensation or the panel itself.</b><br>
+  <b>Find the source of variable refresh rate flicker: frame pacing, low framerate compensation (LFC) or the panel itself.</b><br>
   FreeSync · G-SYNC Compatible · VESA Adaptive-Sync · HDMI VRR · ProMotion
 </p>
 

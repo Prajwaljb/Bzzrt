@@ -30,7 +30,7 @@ ch = 312; cy = (H - ch) // 2
 o.append(f'<rect x="{cx}" y="{cy}" width="{cw}" height="{ch}" fill="#000" fill-opacity=".84"/>')
 px = cx + 44; py = cy + 76
 text(px, py, 'SYNCHORA', WHITE, 9)
-text(px, py + 100, 'VRR FLICKER ANALYSIS', YELLOW, 3)
+text(px, py + 100, 'VRR & LFC ANALYSIS', YELLOW, 3)
 text(px, py + 146, 'Windows  Linux  macOS', GRAY, 2)
 # present interval histogram, 0-50 ms in 0.5 ms bins, VRR 48-200 Hz
 bins, bw, hh = 101, 5, 150
@@ -45,6 +45,8 @@ counts[bins - 1] = 3
 o.append(f'<rect x="{hx}" y="{hy}" width="{bins*bw}" height="{hh}" fill="#1e1e1e"/>')
 lmax = math.log10(1 + max(counts))
 lo, hi = 1000 / 200, 1000 / 48
+zx = hx + round(hi / .5 * bw)  # LFC zone: frame intervals longer than the VRR minimum allows
+o.append(f'<rect x="{zx}" y="{hy}" width="{hx + bins*bw - zx}" height="{hh}" fill="{RED}" fill-opacity=".10"/>')
 for i, n in enumerate(counts):
     if n < .5: continue
     c = (i + .5) * .5
