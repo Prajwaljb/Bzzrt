@@ -8,6 +8,7 @@ cmake --build build-msvc --config Release || goto :error
 if not exist dist\windows mkdir dist\windows
 copy /y build-msvc\Release\vrrdiag.exe dist\windows\ >nul || goto :error
 copy /y README.md dist\windows\ >nul
+copy /y LICENSE dist\windows\LICENSE.txt >nul
 copy /y docs\VRR_LFC_GUIDE.md dist\windows\ >nul
 copy /y packaging\QUICKSTART.txt dist\windows\ >nul
 echo.

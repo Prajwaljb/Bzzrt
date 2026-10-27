@@ -21,5 +21,5 @@ sed "s/@VERSION@/$VERSION/g" packaging/macos/Info.plist > "$APP/Contents/Info.pl
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 # Ad-hoc signature: required for arm64 code; the app is not notarized (see QUICKSTART for opening it).
 codesign --force --deep --sign - "$APP"
-cp README.md docs/VRR_LFC_GUIDE.md packaging/QUICKSTART.txt "$DIST/"
+cp README.md LICENSE docs/VRR_LFC_GUIDE.md packaging/QUICKSTART.txt "$DIST/"
 echo "Packaged $APP"

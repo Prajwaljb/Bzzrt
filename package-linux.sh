@@ -14,7 +14,7 @@ rm -rf "$DIST"
 mkdir -p "$DIST"
 cp build/vrrdiag "$DIST/"
 strip "$DIST/vrrdiag" 2>/dev/null || true
-cp README.md docs/VRR_LFC_GUIDE.md packaging/QUICKSTART.txt packaging/linux/vrrdiag.svg "$DIST/"
+cp README.md LICENSE docs/VRR_LFC_GUIDE.md packaging/QUICKSTART.txt packaging/linux/vrrdiag.svg "$DIST/"
 # Portable launcher: runs the binary sitting next to it.
 sed 's|"@VRRDIAG_BIN@"|"$(dirname "$0")/vrrdiag"|' packaging/linux/vrrdiag-launch.in > "$DIST/vrrdiag-launch"
 chmod +x "$DIST/vrrdiag" "$DIST/vrrdiag-launch"
