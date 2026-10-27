@@ -9,7 +9,7 @@
 namespace vrr {
 
 struct Config {
-    std::string api;           // d3d12 | d3d11 | vulkan | kms   (empty = platform default)
+    std::string api;           // d3d12 | d3d11 | vulkan | kms | metal   (empty = platform default)
     std::string wsi = "auto";  // auto | wayland | x11           (Linux Vulkan)
     int gpuIndex = -1;
     WindowMode windowMode = WindowMode::Borderless;
@@ -36,7 +36,7 @@ struct Config {
     std::string kmsDevice;     // /dev/dri/cardN
     std::string kmsConnector;  // e.g. DP-2
     std::string kmsMode;       // WxH@Hz
-    bool doubleFrames = false; // experiment: the app shows frames below the VRR minimum several times (KMS only)
+    bool doubleFrames = false; // experiment: the app shows frames below the LFC threshold several times
     bool debug = false;
     bool listTests = false;
     bool help = false;

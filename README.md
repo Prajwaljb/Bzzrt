@@ -128,7 +128,7 @@ The Metal shader is compiled at runtime; `build-mac/metal_shader_check` compiles
 | Platform | Command | Result |
 |---|---|---|
 | Linux | `./package-linux.sh` | `dist/linux/` with `vrrdiag`, `vrrdiag-launch` (writes logs to `~/vrrdiag-logs`), docs and icon |
-| Linux | `./package-linux.sh --install` | also installs `~/.local/bin/vrrdiag{,-launch}` and a "VRR/LFC Diagnostic" app-menu entry (right-click it for "Advanced test bench" and "Start windowed") |
+| Linux | `./package-linux.sh --install` | also installs `~/.local/bin/vrrdiag{,-launch}` and a "Synchora" app-menu entry (right-click it for "Advanced test bench" and "Start windowed") |
 | Windows | double-click `build-windows.bat` (needs VS 2022 with the C++ workload, and CMake) | `dist\windows\vrrdiag.exe`, a single self-contained file. When double-clicked it writes CSV logs next to itself. |
 | macOS | `./package-macos.sh` | `dist/macos/Synchora.app`, ad-hoc signed. Logs go to `~/Documents/Synchora` when started from Finder. |
 | All three | push to GitHub | `.github/workflows/build.yml` builds and uploads all three packages |
@@ -143,9 +143,9 @@ To uninstall the Linux menu entry, delete `~/.local/bin/vrrdiag`, `~/.local/bin/
 
 ### Guided flicker check (default)
 
-Start `vrrdiag` (or "VRR/LFC Diagnostic" from the app menu, double-click `vrrdiag.exe` on Windows, or open
+Start `vrrdiag` (or "Synchora" from the app menu, double-click `vrrdiag.exe` on Windows, or open
 `Synchora.app` on macOS) and press **ENTER**, or start it with `vrrdiag --check` to begin right away. Eight 10-second
-tests run one after another on a dark gray screen. During each one press **Y** if you see flicker, **N** if you
+tests (seven in the Windows low-refresh test below) run one after another on a dark gray screen. During each one press **Y** if you see flicker, **N** if you
 don't, **S** if unsure. The test advances on its own.
 
 The tests are built from **your monitor's VRR range** (see below). For a 48-200 Hz monitor they are:
@@ -214,8 +214,8 @@ Each repeat is a real present, and the report says how many landed on time. If t
 flickering, the missing frame doubling of the driver is the cause, not the monitor: `vrrdiag --double-frames --check`.
 
 The result is also saved as `vrrdiag-report-<date>.txt` next to the per-test CSV logs. **R** / **A** enter or switch the VRR range,
-**H** hides the text, **LEFT/RIGHT** change the pattern, **F** toggles fullscreen, **ESC** cancels, **TAB** opens the
-advanced test bench.
+**H** hides the text, **LEFT/RIGHT** change the pattern, **F** toggles fullscreen, **ESC** stops a running check (and quits
+on the start screen), **TAB** opens the advanced test bench, **Q** quits.
 
 ### Advanced test bench
 
@@ -250,13 +250,14 @@ Everywhere: `--vrr-min`, `--vrr-max`, `--lfc-threshold`, `--double-frames`, `--v
 | `L` | CSV logging on/off (applies to the next test start) |
 | `[` / `]` | test duration (∞, 10, 30, 60, 120, 300, 600 s) |
 | `R` / `Shift+R` | random seed +1 / −1 |
+| `TAB` | back to the guided check |
 | `Q`, `ESC` | quit |
 
 ### Tests
 
 | id | Description |
 |---|---|
-| `stable200` … `stable30` | 200, 144, 120, 100, 60, 55, 50, 48, 47, 45, 40, 30 FPS |
+| `stable200` … `stable30` | 200, 144, 120, 100, 90, 60, 55, 50, 48, 47, 45, 40, 30 FPS |
 | `custom` | stable FPS set with `+`/`-` or `--fps` |
 | `lfc50`, `lfc47` | stable 50 FPS (just above a 48 Hz floor) / 47 FPS (just below); use `--fps` for other floors |
 | `sweep` | smooth 45 → 55 → 45 FPS triangle sweep (`--sweep-period`) |
@@ -268,7 +269,7 @@ Everywhere: `--vrr-min`, `--vrr-max`, `--lfc-threshold`, `--double-frames`, `--v
 | `lows` | constant average (`--lows-avg`) where `--lows-percent` % of frames run at `--lows-fps` |
 
 All random tests use a deterministic SplitMix64 generator. **The same seed produces the same frame-time
-sequence on Windows and Linux**, so the two OSes can be compared frame for frame.
+sequence on Windows, Linux and macOS**, so systems can be compared frame for frame.
 
 ### Patterns
 

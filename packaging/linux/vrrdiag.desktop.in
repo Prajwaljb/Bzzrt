@@ -1,13 +1,13 @@
 [Desktop Entry]
 Type=Application
-Name=VRR/LFC Diagnostic
-GenericName=Variable refresh rate test
-Comment=Guided check: does VRR flicker come from the monitor or from this computer?
+Name=Synchora
+GenericName=VRR flicker and LFC diagnostic
+Comment=Guided check that separates monitor-side VRR flicker from frame pacing problems
 Exec=@VRRDIAG_LAUNCHER@
 Icon=vrrdiag
 Terminal=false
 Categories=System;Monitor;
-Keywords=VRR;FreeSync;Adaptive-Sync;LFC;flicker;refresh;monitor;
+Keywords=VRR;FreeSync;G-SYNC;Adaptive-Sync;LFC;flicker;refresh;monitor;Synchora;
 Actions=advanced;windowed;
 
 [Desktop Action windowed]

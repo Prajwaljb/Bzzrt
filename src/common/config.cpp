@@ -23,7 +23,11 @@ void printUsage(const char* argv0) {
 #endif
         "  --double-frames            Experiment: the app itself shows frames below the LFC threshold\n"
         "                             several times at even intervals, as a driver with LFC would\n"
+#ifdef _WIN32
+        "  --gpu N                    GPU / adapter index (default: the GPU driving the monitor)\n"
+#else
         "  --gpu N                    GPU / adapter index (default: first usable)\n"
+#endif
         "  --present ID               Present mode id (see overlay; e.g. fifo, mailbox, immediate,\n"
         "                             vsync, tearing, nosync, vrr, fixed, async)\n"
         "  --10bit                    Request a 10-bit swap chain (SDR, no HDR)\n"

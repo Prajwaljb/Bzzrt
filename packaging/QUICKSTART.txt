@@ -6,7 +6,7 @@ Works with FreeSync, Adaptive-Sync, G-SYNC Compatible, HDMI VRR and ProMotion di
 
 1. Turn on Adaptive-Sync / FreeSync in the monitor's own menu, and in the system:
    Windows: Settings > System > Display > Graphics > Variable refresh rate = On.
-   KDE: System Settings > Display Configuration > Adaptive sync = Always (or Automatic).
+   KDE: System Settings > Display & Monitor > Adaptive sync = Always (or Automatic).
    GNOME 50+: Settings > Displays > Variable Refresh Rate.
    macOS 14+: System Settings > Displays > Refresh Rate = Variable.
    Set the display to its highest refresh rate.
@@ -19,7 +19,8 @@ Works with FreeSync, Adaptive-Sync, G-SYNC Compatible, HDMI VRR and ProMotion di
    R and type yours (e.g. 48, ENTER, 144, ENTER, ENTER). A switches between the two.
    Both are remembered. If nothing was detected, ENTER asks for the range first.
    Yellow lines are setup problems worth fixing first.
-4. Press ENTER. Eight 10-second tests follow on a dark gray screen.
+4. Press ENTER. Eight 10-second tests follow on a dark gray screen (seven with the
+   Windows low-refresh test, L).
    For each one press  Y = I see flicker,  N = no flicker,  S = not sure.
    If the monitor's menu can show the current refresh rate, type the number you see.
 5. The result screen tells you whether the flicker points to the monitor or to the
@@ -28,7 +29,7 @@ Works with FreeSync, Adaptive-Sync, G-SYNC Compatible, HDMI VRR and ProMotion di
 
 Keys: F = windowed / fullscreen (/ exclusive on Windows), R = enter your VRR range,
       A = detected / your range, H = hide text,
-      LEFT/RIGHT = change pattern, ESC = cancel, TAB = advanced test bench, Q = quit.
+      LEFT/RIGHT = change pattern, ESC = stop the check, TAB = advanced test bench, Q = quit.
 
 If the result says "VRR WAS NOT ACTIVE": check step 1, keep the app fullscreen, and on
 Windows press F until it says "Exclusive fullscreen", then run the check again.
