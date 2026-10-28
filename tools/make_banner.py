@@ -30,13 +30,13 @@ rim = 12
 rect(rim, rim, W - 2 * rim, H - 2 * rim, '#000', .84)
 mid = H // 2
 # left: name and taglines
-left = [(72, 28), (24, 18), (16, 12), (16, 0)]
+left = [(96, 30), (24, 18), (16, 12), (16, 0)]
 py = mid - sum(h + g for h, g in left) // 2
 px = rim + 56
-text(px, py, 'SYNCHORA', WHITE, 9)
-text(px, py + 100, 'VRR & LFC ANALYSIS', YELLOW, 3)
-text(px, py + 142, 'Frame pacing and flicker diagnostics', CYAN, 2)
-text(px, py + 170, 'Windows  Linux  macOS', GRAY, 2)
+text(px, py, 'BZZRT', WHITE, 12)
+text(px, py + 126, 'VRR & LFC ANALYSIS', YELLOW, 3)
+text(px, py + 168, 'Frame pacing and flicker diagnostics', CYAN, 2)
+text(px, py + 196, 'Windows  Linux  macOS', GRAY, 2)
 # right: present interval histogram, 0-50 ms in 0.5 ms bins, VRR range 48-200 Hz
 bins, bw, hh = 101, 5, 150
 hx = W - rim - 56 - bins * bw
@@ -63,7 +63,7 @@ text(hx, ly, '0', GRAY, 2); text(hx + 50 * bw - 16, ly, '25', GRAY, 2); text(hx 
 text(hx, ly + 30, 'present interval (ms)', GRAY, 2)
 text(hx, ly + 56, 'red: > 20.83 ms  LFC zone', RED, 2)
 if H >= 500:
-    url = 'github.com/Prajwaljb/Synchora'
+    url = 'github.com/Prajwaljb/Bzzrt'
     text((W - 16 * len(url)) // 2, H - rim - 56, url, GRAY, 2)
 o.append('</svg>')
 open(out, 'w').write('\n'.join(o) + '\n')

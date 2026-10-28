@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.svg" alt="Synchora: VRR flicker and LFC diagnostic for Windows, Linux and macOS" width="100%">
+  <img src="docs/banner.svg" alt="Bzzrt: VRR flicker and LFC diagnostic for Windows, Linux and macOS" width="100%">
 </p>
 
 <p align="center">
@@ -8,12 +8,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Prajwaljb/Synchora/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Prajwaljb/Synchora?style=flat-square&color=5ae66e"></a>
-  <a href="https://github.com/Prajwaljb/Synchora/actions/workflows/build.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/Prajwaljb/Synchora/build.yml?branch=main&style=flat-square"></a>
+  <a href="https://github.com/Prajwaljb/Bzzrt/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Prajwaljb/Bzzrt?style=flat-square&color=5ae66e"></a>
+  <a href="https://github.com/Prajwaljb/Bzzrt/actions/workflows/build.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/Prajwaljb/Bzzrt/build.yml?branch=main&style=flat-square"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-5ad2ff?style=flat-square">
   <img alt="APIs" src="https://img.shields.io/badge/D3D12%20%7C%20Vulkan%20%7C%20Metal-native-ffdc3c?style=flat-square">
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/Prajwaljb/Synchora?style=flat-square&color=a0a0a0"></a>
-  <a href="https://github.com/Prajwaljb/Synchora/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/Prajwaljb/Synchora/total?style=flat-square&color=ff5046"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/Prajwaljb/Bzzrt?style=flat-square&color=a0a0a0"></a>
+  <a href="https://github.com/Prajwaljb/Bzzrt/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/Prajwaljb/Bzzrt/total?style=flat-square&color=ff5046"></a>
 </p>
 
 <p align="center">
@@ -30,11 +30,11 @@
 
 | Platform | Package | Needs |
 |---|---|---|
-| 🪟 **Windows** 10/11 x64 | [`synchora-1.0.1-windows-x64.zip`](https://github.com/Prajwaljb/Synchora/releases/latest/download/synchora-1.0.1-windows-x64.zip) | D3D12 or D3D11 GPU |
-| 🐧 **Linux** x86_64 | [`synchora-1.0.1-linux-x86_64.tar.gz`](https://github.com/Prajwaljb/Synchora/releases/latest/download/synchora-1.0.1-linux-x86_64.tar.gz) | Vulkan driver, glibc 2.34+ (Ubuntu 22.04+, Fedora 35+, Arch) |
-| 🍎 **macOS** 12+ Apple silicon | [`synchora-1.0.1-macos-arm64.zip`](https://github.com/Prajwaljb/Synchora/releases/latest/download/synchora-1.0.1-macos-arm64.zip) | not notarized: allow it once under System Settings → Privacy & Security → *Open Anyway* |
+| 🪟 **Windows** 10/11 x64 | [`bzzrt-…-windows-x64.zip`](https://github.com/Prajwaljb/Bzzrt/releases/latest) | D3D12 or D3D11 GPU |
+| 🐧 **Linux** x86_64 | [`bzzrt-…-linux-x86_64.tar.gz`](https://github.com/Prajwaljb/Bzzrt/releases/latest) | Vulkan driver, glibc 2.34+ (Ubuntu 22.04+, Fedora 35+, Arch) |
+| 🍎 **macOS** 12+ Apple silicon | [`bzzrt-…-macos-arm64.zip`](https://github.com/Prajwaljb/Bzzrt/releases/latest) | not notarized: allow it once under System Settings → Privacy & Security → *Open Anyway* |
 
-Unpack it, start it on the monitor you want to test and press **ENTER**. Synchora reads the monitor's VRR range from
+Unpack it, start it on the monitor you want to test and press **ENTER**. Bzzrt reads the monitor's VRR range from
 its EDID. If it can't find one, or the detected range is wrong, you type in the range before the test starts
 (see [QUICKSTART](packaging/QUICKSTART.txt)). Checksums are in `SHA256SUMS` on the release page.
 
@@ -117,7 +117,7 @@ pre-compiled SPIR-V in `shaders/prebuilt/` is used.
 ### macOS (Xcode command line tools)
 
 ```bash
-./package-macos.sh                 # dist/macos/Synchora.app (arm64, macOS 12+)
+./package-macos.sh                 # dist/macos/Bzzrt.app (arm64, macOS 12+)
 ARCHS="arm64;x86_64" ./package-macos.sh   # universal build for Intel Macs too
 ```
 
@@ -128,9 +128,9 @@ The Metal shader is compiled at runtime; `build-mac/metal_shader_check` compiles
 | Platform | Command | Result |
 |---|---|---|
 | Linux | `./package-linux.sh` | `dist/linux/` with `vrrdiag`, `vrrdiag-launch` (writes logs to `~/vrrdiag-logs`), docs and icon |
-| Linux | `./package-linux.sh --install` | also installs `~/.local/bin/vrrdiag{,-launch}` and a "Synchora" app-menu entry (right-click it for "Advanced test bench" and "Start windowed") |
+| Linux | `./package-linux.sh --install` | also installs `~/.local/bin/vrrdiag{,-launch}` and a "Bzzrt" app-menu entry (right-click it for "Advanced test bench" and "Start windowed") |
 | Windows | double-click `build-windows.bat` (needs VS 2022 with the C++ workload, and CMake) | `dist\windows\vrrdiag.exe`, a single self-contained file. When double-clicked it writes CSV logs next to itself. |
-| macOS | `./package-macos.sh` | `dist/macos/Synchora.app`, ad-hoc signed. Logs go to `~/Documents/Synchora` when started from Finder. |
+| macOS | `./package-macos.sh` | `dist/macos/Bzzrt.app`, ad-hoc signed. Logs go to `~/Documents/Bzzrt` when started from Finder. |
 | All three | push to GitHub | `.github/workflows/build.yml` builds and uploads all three packages |
 | Windows from Linux | `cmake -S . -B build-win -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64-x86_64.cmake && cmake --build build-win` | `build-win/vrrdiag.exe` (needs `mingw-w64-gcc` or llvm-mingw on `PATH`) |
 
@@ -143,8 +143,8 @@ To uninstall the Linux menu entry, delete `~/.local/bin/vrrdiag`, `~/.local/bin/
 
 ### Guided flicker check (default)
 
-Start `vrrdiag` (or "Synchora" from the app menu, double-click `vrrdiag.exe` on Windows, or open
-`Synchora.app` on macOS) and press **ENTER**, or start it with `vrrdiag --check` to begin right away. Eight 10-second
+Start `vrrdiag` (or "Bzzrt" from the app menu, double-click `vrrdiag.exe` on Windows, or open
+`Bzzrt.app` on macOS) and press **ENTER**, or start it with `vrrdiag --check` to begin right away. Eight 10-second
 tests (seven in the Windows low-refresh test below) run one after another on a dark gray screen. During each one press **Y** if you see flicker, **N** if you
 don't, **S** if unsure. The test advances on its own.
 
@@ -173,8 +173,8 @@ The start screen shows two ranges side by side, and you choose which one the che
   most common minimum.
 
 **A** switches between them. Entering a range selects it; the detected one is never thrown away. Both, and your
-choice, are remembered per monitor in `~/.config/synchora/ranges.txt`, `%APPDATA%\Synchora\ranges.txt` or
-`~/Library/Application Support/Synchora/ranges.txt`. If nothing is detected and you have not entered a range, the check
+choice, are remembered per monitor in `~/.config/bzzrt/ranges.txt`, `%APPDATA%\Bzzrt\ranges.txt` or
+`~/Library/Application Support/Bzzrt/ranges.txt`. If nothing is detected and you have not entered a range, the check
 **asks before it starts**. `--vrr-min HZ --vrr-max HZ` on the command line override both.
 
 Why keep both: detection is not always right. The EDID range limits are not necessarily the VRR range, monitors with
@@ -384,9 +384,9 @@ cd ~/Code/VRR && ./build/vrrdiag --api kms --test switch47-50 --start
   warns that macOS is not using VRR.
 * macOS only uses variable refresh for **fullscreen** apps: the check starts in native fullscreen (`F` toggles it).
 * Timing comes from `MTLDrawable.presentedTime`, in the same clock as the app's own timestamps.
-* The app is ad-hoc signed but not notarized. On first start, right-click `Synchora.app` → *Open* (macOS 15: System
-  Settings → Privacy & Security → *Open Anyway*), or run `xattr -dr com.apple.quarantine Synchora.app`.
-* From a terminal: `Synchora.app/Contents/MacOS/vrrdiag --help`.
+* The app is ad-hoc signed but not notarized. On first start, right-click `Bzzrt.app` → *Open* (macOS 15: System
+  Settings → Privacy & Security → *Open Anyway*), or run `xattr -dr com.apple.quarantine Bzzrt.app`.
+* From a terminal: `Bzzrt.app/Contents/MacOS/vrrdiag --help`.
 
 ---
 

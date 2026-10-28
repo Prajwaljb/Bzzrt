@@ -1,7 +1,7 @@
-Synchora - VRR flicker check
+Bzzrt - VRR flicker check
 ============================
 
-Synchora diagnoses VRR flicker by separating monitor behaviour from frame pacing.
+Bzzrt diagnoses VRR flicker by separating monitor behaviour from frame pacing.
 Works with FreeSync, Adaptive-Sync, G-SYNC Compatible, HDMI VRR and ProMotion displays.
 
 1. Turn on Adaptive-Sync / FreeSync in the monitor's own menu, and in the system:
@@ -12,7 +12,7 @@ Works with FreeSync, Adaptive-Sync, G-SYNC Compatible, HDMI VRR and ProMotion di
    Set the display to its highest refresh rate.
 2. Start the app ON THE MONITOR YOU WANT TO TEST:
    Windows: double-click vrrdiag.exe there.  Linux: run ./vrrdiag-launch.
-   macOS: open Synchora.app. The first time, right-click it and choose Open (macOS 15:
+   macOS: open Bzzrt.app. The first time, right-click it and choose Open (macOS 15:
    System Settings > Privacy & Security > Open Anyway), because it is not notarized.
 3. Read the start screen. It shows the VRR range detected from the monitor and, if you
    entered one, your own range. If the detected one is wrong (check the spec sheet), press
@@ -25,7 +25,7 @@ Works with FreeSync, Adaptive-Sync, G-SYNC Compatible, HDMI VRR and ProMotion di
    If the monitor's menu can show the current refresh rate, type the number you see.
 5. The result screen tells you whether the flicker points to the monitor or to the
    computer's graphics driver. It is also saved as vrrdiag-report-<date>.txt
-   (macOS: in Documents/Synchora).
+   (macOS: in Documents/Bzzrt).
 
 Keys: F = windowed / fullscreen (/ exclusive on Windows), R = enter your VRR range,
       A = detected / your range, H = hide text,

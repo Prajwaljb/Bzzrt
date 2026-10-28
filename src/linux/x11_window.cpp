@@ -51,7 +51,7 @@ bool X11Window::init(const Config& cfg, std::string& err) {
                       static_cast<uint16_t>(height_), 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, screen_->root_visual, mask,
                       values);
 
-    const char* title = "Synchora - VRR flicker check";
+    const char* title = "Bzzrt - VRR flicker check";
     xcb_change_property(conn_, XCB_PROP_MODE_REPLACE, window_, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8,
                         static_cast<uint32_t>(std::strlen(title)), title);
     wmProtocols_ = atom("WM_PROTOCOLS");

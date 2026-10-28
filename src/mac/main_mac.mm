@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
             return 0;
         }
         if (cfg.version) {
-            std::printf("Synchora %s\n", kVersion);
+            std::printf("Bzzrt %s\n", kVersion);
             return 0;
         }
         if (cfg.listTests) {
@@ -43,10 +43,10 @@ int main(int argc, char** argv) {
             return 2;
         }
         cfg.api = "metal";
-        // Started from Finder the working directory is "/", so logs go to ~/Documents/Synchora instead.
+        // Started from Finder the working directory is "/", so logs go to ~/Documents/Bzzrt instead.
         if (cfg.logDir == "." && access(".", W_OK) != 0) {
             if (const char* home = std::getenv("HOME")) {
-                cfg.logDir = std::string(home) + "/Documents/Synchora";
+                cfg.logDir = std::string(home) + "/Documents/Bzzrt";
                 std::error_code ec;
                 std::filesystem::create_directories(cfg.logDir, ec);
             }

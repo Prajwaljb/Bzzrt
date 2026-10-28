@@ -161,7 +161,7 @@ bool MacPlatform::create(const Config& cfg, std::string& err) {
                     backing:NSBackingStoreBuffered
                       defer:NO];
     if (!window_) return err = "cannot create window", false;
-    window_.title = @"Synchora - VRR flicker check";
+    window_.title = @"Bzzrt - VRR flicker check";
     window_.collectionBehavior = NSWindowCollectionBehaviorFullScreenPrimary;
     window_.releasedWhenClosed = NO;
     view_ = [[VrrView alloc] initWithFrame:NSMakeRect(0, 0, w, h)];

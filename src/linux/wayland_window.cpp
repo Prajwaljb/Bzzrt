@@ -215,7 +215,7 @@ bool WaylandWindow::init(const Config& cfg, std::string& err) {
     xdg_surface_add_listener(xdgSurface_, &kXdgSurfaceListener, this);
     toplevel_ = xdg_surface_get_toplevel(xdgSurface_);
     xdg_toplevel_add_listener(toplevel_, &kToplevelListener, this);
-    xdg_toplevel_set_title(toplevel_, "Synchora - VRR flicker check");
+    xdg_toplevel_set_title(toplevel_, "Bzzrt - VRR flicker check");
     xdg_toplevel_set_app_id(toplevel_, "vrrdiag");
     if (mode_ == WindowMode::Borderless) xdg_toplevel_set_fullscreen(toplevel_, nullptr);
 #ifdef VRRDIAG_HAVE_CONTENT_TYPE

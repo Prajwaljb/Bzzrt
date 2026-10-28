@@ -8,7 +8,7 @@ namespace vrr {
 
 void printUsage(const char* argv0) {
     std::printf(
-        "Synchora %s - VRR / FreeSync / G-SYNC / Adaptive-Sync flicker and LFC diagnostic\n\n"
+        "Bzzrt %s - VRR / FreeSync / G-SYNC / Adaptive-Sync flicker and LFC diagnostic\n\n"
         "Usage: %s [options]\n\n"
         "Backend\n"
 #if defined(_WIN32)

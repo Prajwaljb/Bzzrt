@@ -11,8 +11,8 @@ struct SavedRange {
     bool useManual = true;   // false: the user switched back to the detected range but kept this entry
 };
 
-// Per-user settings directory: $XDG_CONFIG_HOME/synchora, %APPDATA%\Synchora or
-// ~/Library/Application Support/Synchora. Empty if it cannot be determined.
+// Per-user settings directory: $XDG_CONFIG_HOME/bzzrt, %APPDATA%\Bzzrt or
+// ~/Library/Application Support/Bzzrt. Empty if it cannot be determined.
 std::string configDir();
 
 bool loadRange(const std::string& monitorKey, SavedRange& out);

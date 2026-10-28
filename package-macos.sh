@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds dist/macos/Synchora.app (arm64, macOS 12+) and a zip of it. Run on a Mac with the Xcode command line tools.
+# Builds dist/macos/Bzzrt.app (arm64, macOS 12+) and a zip of it. Run on a Mac with the Xcode command line tools.
 #   ./package-macos.sh              Apple silicon build
 #   ARCHS="arm64;x86_64" ./package-macos.sh   universal build
 set -eu
@@ -12,7 +12,7 @@ cmake -S . -B build-mac -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET
 cmake --build build-mac --parallel
 
 DIST="$ROOT/dist/macos"
-APP="$DIST/Synchora.app"
+APP="$DIST/Bzzrt.app"
 rm -rf "$DIST"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp build-mac/vrrdiag "$APP/Contents/MacOS/vrrdiag"

@@ -480,7 +480,7 @@ void App::buildOverlay(int64_t now) {
     } else {
         state = fmt("IDLE @ %.0f FPS - SPACE starts test", cfg_.idleFps);
     }
-    add("SYNCHORA VRR/LFC DIAGNOSTIC   [" + state + "]", running_ ? kGreen : kYellow);
+    add("BZZRT VRR/LFC DIAGNOSTIC   [" + state + "]", running_ ? kGreen : kYellow);
     add("API: " + binfo_.api + "   (" + platform_.name() + ")", kCyan);
     add("GPU: " + binfo_.gpu, kCyan);
     {
@@ -843,7 +843,7 @@ CheckContext App::checkContext() const {
 void App::writeReport() {
     const auto& steps = resultSteps_;
     std::vector<std::string> lines;
-    lines.push_back(std::string("Synchora ") + kVersion + " VRR flicker check - " + wallClockStamp("%Y-%m-%d %H:%M:%S"));
+    lines.push_back(std::string("Bzzrt ") + kVersion + " VRR flicker check - " + wallClockStamp("%Y-%m-%d %H:%M:%S"));
     lines.push_back("System: " + binfo_.api + " (" + platform_.name() + "), GPU: " + binfo_.gpu);
     lines.push_back("Output: " + dinfo_.outputName + " " + dinfo_.monitorName + " " + displayModeString(dinfo_));
     lines.push_back(fmt("VRR range: %.0f-%.0f Hz (%s)   Window: %s", vrrMin_, vrrMax_, rangeSource_.c_str(),

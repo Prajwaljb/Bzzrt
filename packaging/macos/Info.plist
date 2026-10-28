@@ -4,10 +4,10 @@
 <dict>
   <key>CFBundleDevelopmentRegion</key><string>en</string>
   <key>CFBundleExecutable</key><string>vrrdiag</string>
-  <key>CFBundleIdentifier</key><string>io.github.prajwaljb.synchora</string>
+  <key>CFBundleIdentifier</key><string>io.github.prajwaljb.bzzrt</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleName</key><string>Synchora</string>
-  <key>CFBundleDisplayName</key><string>Synchora</string>
+  <key>CFBundleName</key><string>Bzzrt</string>
+  <key>CFBundleDisplayName</key><string>Bzzrt</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>@VERSION@</string>
   <key>CFBundleVersion</key><string>@VERSION@</string>

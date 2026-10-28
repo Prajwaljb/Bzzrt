@@ -123,7 +123,7 @@ bool WinPlatform::create(const Config& cfg, std::string& err) {
         x = mi.rcWork.left + std::max(0, static_cast<int>(mi.rcWork.right - mi.rcWork.left) - w) / 2;
         y = mi.rcWork.top + std::max(0, static_cast<int>(mi.rcWork.bottom - mi.rcWork.top) - h) / 2;
     }
-    hwnd_ = CreateWindowExW(0, wc.lpszClassName, L"Synchora - VRR flicker check", WS_OVERLAPPEDWINDOW, x, y, w, h, nullptr,
+    hwnd_ = CreateWindowExW(0, wc.lpszClassName, L"Bzzrt - VRR flicker check", WS_OVERLAPPEDWINDOW, x, y, w, h, nullptr,
                             nullptr, inst, this);
     if (!hwnd_) return err = "CreateWindowExW failed", false;
     ShowWindow(hwnd_, SW_SHOW);

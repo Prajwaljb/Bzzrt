@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (cfg.version) {
-        std::printf("Synchora %s\n", kVersion);
+        std::printf("Bzzrt %s\n", kVersion);
         return 0;
     }
     if (cfg.listTests) {
