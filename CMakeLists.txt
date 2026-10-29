@@ -47,8 +47,9 @@ if(WIN32)
     list(APPEND WIN_SOURCES src/win/d3d11_backend.cpp)
   endif()
 
-  add_executable(vrrdiag ${COMMON_SOURCES} ${WIN_SOURCES})
-  target_include_directories(vrrdiag PRIVATE ${GEN_DIR})
+  add_executable(vrrdiag ${COMMON_SOURCES} ${WIN_SOURCES} packaging/windows/bzzrt.rc)
+  # The include path also lets the resource compiler find bzzrt.ico next to bzzrt.rc.
+  target_include_directories(vrrdiag PRIVATE ${GEN_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows)
   target_compile_definitions(vrrdiag PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
   target_link_libraries(vrrdiag PRIVATE d3d12 dxgi d3dcompiler dxguid winmm avrt setupapi)
   if(VRRDIAG_D3D11)

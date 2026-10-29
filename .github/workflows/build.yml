@@ -75,6 +75,7 @@ jobs:
           dist/macos/Bzzrt.app/Contents/MacOS/vrrdiag --version
           dist/macos/Bzzrt.app/Contents/MacOS/vrrdiag --help > /dev/null
           codesign --verify --verbose dist/macos/Bzzrt.app
+          test -s dist/macos/Bzzrt.app/Contents/Resources/bzzrt.icns && file dist/macos/Bzzrt.app/Contents/Resources/bzzrt.icns
       - name: Run a short test (needs the runner's GUI session)
         continue-on-error: true
         timeout-minutes: 2

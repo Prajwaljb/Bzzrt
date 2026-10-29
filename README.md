@@ -459,7 +459,7 @@ src/linux/    Vulkan backend, Wayland and X11 windows, DRM/KMS backend, TTY inpu
 src/mac/      Cocoa window, Metal backend
 shaders/      pattern.hlsl (D3D), pattern.vert/.frag (Vulkan) + prebuilt SPIR-V, pattern.metal (Metal)
 packaging/    Linux desktop entry, launcher and icon; macOS Info.plist; QUICKSTART
-tools/        metal_shader_check (CI), make_banner.py (README banner and social preview)
+tools/        metal_shader_check (CI), make_banner.py (README banner and social preview), make_icon.py (app icon)
 cmake/        MinGW-w64 toolchain file for cross-compiling the Windows .exe
 ```
 

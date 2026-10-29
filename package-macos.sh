@@ -19,6 +19,14 @@ cp build-mac/vrrdiag "$APP/Contents/MacOS/vrrdiag"
 strip -x "$APP/Contents/MacOS/vrrdiag" 2>/dev/null || true
 sed "s/@VERSION@/$VERSION/g" packaging/macos/Info.plist > "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
+# App icon: every size Finder and the Dock use, built from the 1024 px master.
+ICONSET="$ROOT/build-mac/bzzrt.iconset"
+rm -rf "$ICONSET" && mkdir -p "$ICONSET"
+for s in 16 32 128 256 512; do
+  sips -z $s $s packaging/macos/bzzrt-1024.png --out "$ICONSET/icon_${s}x${s}.png" >/dev/null
+  sips -z $((s * 2)) $((s * 2)) packaging/macos/bzzrt-1024.png --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
+done
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/bzzrt.icns"
 # Ad-hoc signature: required for arm64 code; the app is not notarized (see QUICKSTART for opening it).
 codesign --force --deep --sign - "$APP"
 cp README.md LICENSE docs/VRR_LFC_GUIDE.md packaging/QUICKSTART.txt "$DIST/"

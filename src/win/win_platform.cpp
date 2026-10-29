@@ -107,6 +107,10 @@ bool WinPlatform::create(const Config& cfg, std::string& err) {
     wc.lpfnWndProc = wndProc;
     wc.hInstance = inst;
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    // Icon resource 1 (packaging/windows/bzzrt.rc), in the large and the title-bar size.
+    wc.hIcon = LoadIconW(inst, MAKEINTRESOURCEW(1));
+    wc.hIconSm = static_cast<HICON>(LoadImageW(inst, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
+                                               GetSystemMetrics(SM_CYSMICON), 0));
     wc.lpszClassName = L"VrrDiagWindow";
     if (!RegisterClassExW(&wc)) return err = "RegisterClassExW failed", false;
 
