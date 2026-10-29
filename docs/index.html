@@ -76,11 +76,13 @@
     <p class="lead">A free, open-source tool that finds out why a FreeSync, G-SYNC Compatible or Adaptive-Sync monitor
       flickers: low framerate compensation (LFC), uneven frame pacing, or the panel itself.</p>
     <div class="downloads">
-      <a class="btn" href="https://github.com/Prajwaljb/Bzzrt/releases/latest">Download for Windows</a>
-      <a class="btn" href="https://github.com/Prajwaljb/Bzzrt/releases/latest">Download for Linux</a>
-      <a class="btn" href="https://github.com/Prajwaljb/Bzzrt/releases/latest">Download for macOS</a>
+      <a class="btn" data-asset="-windows-x64.zip" href="https://github.com/Prajwaljb/Bzzrt/releases/download/v1.1.1/bzzrt-1.1.1-windows-x64.zip">Download for Windows</a>
+      <a class="btn" data-asset="-linux-x86_64.tar.gz" href="https://github.com/Prajwaljb/Bzzrt/releases/download/v1.1.1/bzzrt-1.1.1-linux-x86_64.tar.gz">Download for Linux</a>
+      <a class="btn" data-asset="-macos-arm64.zip" href="https://github.com/Prajwaljb/Bzzrt/releases/download/v1.1.1/bzzrt-1.1.1-macos-arm64.zip">Download for macOS</a>
       <a class="btn" href="https://github.com/Prajwaljb/Bzzrt">Source on GitHub</a>
     </div>
+    <p class="lead" style="margin-top:12px">Version <span id="ver">1.1.1</span> ·
+      <a href="https://github.com/Prajwaljb/Bzzrt/releases/latest">release notes and checksums</a></p>
   </section>
 
   <section class="card">
@@ -121,5 +123,18 @@
   <footer>Bzzrt (formerly Synchora) · MIT licence ·
     <a href="https://github.com/Prajwaljb/Bzzrt">github.com/Prajwaljb/Bzzrt</a></footer>
 </main>
+<script>
+// The buttons point at a fixed release; this switches them to the newest one's files.
+fetch("https://api.github.com/repos/Prajwaljb/Bzzrt/releases/latest")
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(rel => {
+    document.querySelectorAll("a[data-asset]").forEach(a => {
+      const f = rel.assets.find(x => x.name.endsWith(a.dataset.asset));
+      if (f) a.href = f.browser_download_url;
+    });
+    document.getElementById("ver").textContent = rel.tag_name.replace(/^v/, "");
+  })
+  .catch(() => {});
+</script>
 </body>
 </html>
