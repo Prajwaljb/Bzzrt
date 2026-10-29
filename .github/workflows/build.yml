@@ -38,6 +38,42 @@ jobs:
           name: linux-x86_64
           path: bzzrt-*-linux-x86_64.tar.gz
 
+  arch:
+    # A pacman package built with Arch's stock makepkg flags (generic x86-64), from this commit's source.
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          pacman -Syu --noconfirm --needed git cmake glslang pkgconf vulkan-headers wayland-protocols \
+            libdrm libxcb vulkan-icd-loader wayland
+          useradd -m builder
+      - name: Build package
+        run: |
+          VERSION=$(sed -n 's/^project(vrrdiag VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          pkgver=$(sed -n 's/^pkgver=//p' packaging/aur/PKGBUILD)
+          if [ "$pkgver" != "$VERSION" ]; then
+            echo "packaging/aur/PKGBUILD has pkgver $pkgver, CMakeLists.txt has $VERSION"; exit 1
+          fi
+          mkdir /tmp/pkg
+          cp packaging/aur/PKGBUILD /tmp/pkg/
+          # makepkg uses this local file instead of downloading the release tag.
+          git config --global --add safe.directory "$PWD"
+          git archive --prefix="Bzzrt-$pkgver/" -o "/tmp/pkg/bzzrt-$pkgver.tar.gz" HEAD
+          chown -R builder /tmp/pkg
+          cd /tmp/pkg && su builder -c "makepkg --skipchecksums --noconfirm"
+      - name: Smoke test
+        run: |
+          pacman -U --noconfirm /tmp/pkg/bzzrt-[0-9]*.pkg.tar.zst
+          bzzrt --version
+          vrrdiag --list-tests > /dev/null
+          pacman -Ql bzzrt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-x86_64
+          path: /tmp/pkg/bzzrt-[0-9]*.pkg.tar.zst
+
   windows:
     runs-on: windows-2022
     steps:

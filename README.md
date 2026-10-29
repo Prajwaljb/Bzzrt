@@ -40,8 +40,15 @@ Unpack it, start it on the monitor you want to test and press **ENTER**. Bzzrt r
 its EDID. If it can't find one, or the detected range is wrong, you type in the range before the test starts
 (see [QUICKSTART](packaging/QUICKSTART.txt)). Checksums are in `SHA256SUMS` on the release page.
 
-**Arch Linux and derivatives** (CachyOS, EndeavourOS, Manjaro): build and install the package with
-[`packaging/aur/PKGBUILD`](packaging/aur/PKGBUILD). This adds `vrrdiag` (also as `bzzrt`) and a "Bzzrt" app-menu entry.
+**Arch Linux and derivatives** (CachyOS, EndeavourOS, Manjaro): install the ready-made package from the
+[latest release](https://github.com/Prajwaljb/Bzzrt/releases/latest). This adds `vrrdiag` (also as `bzzrt`) and a
+"Bzzrt" app-menu entry.
+
+```
+sudo pacman -U https://github.com/Prajwaljb/Bzzrt/releases/download/v1.1.1/bzzrt-1.1.1-1-x86_64.pkg.tar.zst
+```
+
+Or build it yourself from [`packaging/aur/PKGBUILD`](packaging/aur/PKGBUILD):
 
 ```
 git clone https://github.com/Prajwaljb/Bzzrt.git
