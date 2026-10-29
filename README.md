@@ -2,6 +2,8 @@
   <img src="docs/banner.svg" alt="Bzzrt: VRR flicker and LFC diagnostic for Windows, Linux and macOS" width="100%">
 </p>
 
+<h1 align="center">Bzzrt: VRR flicker test and LFC diagnostic</h1>
+
 <p align="center">
   <b>Find the source of variable refresh rate flicker: frame pacing, low framerate compensation (LFC) or the panel itself.</b><br>
   FreeSync · G-SYNC Compatible · VESA Adaptive-Sync · HDMI VRR · ProMotion
@@ -62,6 +64,28 @@ It is a native application on every platform:
 > *presented*. It cannot see what the panel actually scanned out. Watch the monitor's OSD refresh
 > readout, or film the screen with a high-speed camera, to confirm what the panel is doing.
 > See [docs/VRR_LFC_GUIDE.md](docs/VRR_LFC_GUIDE.md).
+
+## Common questions
+
+**Why does my FreeSync or G-SYNC Compatible monitor flicker at low FPS?**
+Below the monitor's VRR minimum (often 48 Hz) the panel cannot hold a frame any longer, so the driver must show frames
+twice or more (low framerate compensation, LFC), or the panel forces a repeat on its own. Many panels, VA panels in
+particular, change brightness with how long each frame is held. Entering and leaving LFC therefore shows up as
+flicker. Bzzrt runs steady and switching tests on both sides of the minimum so you can see where it starts.
+
+**Is VRR flicker a defect of my monitor?**
+It depends on when it happens. Flicker at a *steady* frame rate inside the VRR range, while the computer delivers
+evenly timed frames, points to the monitor. Flicker only when the frame rate crosses the minimum, or only when the frame
+timing is uneven, is a known VRR side effect or a driver / compositor problem. Bzzrt measures the timing and tells you
+which case you have.
+
+**How do I find my monitor's VRR range?**
+Bzzrt reads it from the monitor's EDID (FreeSync data block, DisplayID Adaptive-Sync, HDMI VRR or range limits) and
+shows it on the start screen. If it is missing or wrong, press **R** and type the range from the spec sheet.
+
+**Does it work on Linux and Wayland?**
+Yes. It uses Vulkan on Wayland (KDE, GNOME, Hyprland, Sway) and X11, plus an optional direct DRM/KMS mode that bypasses
+the compositor. Windows uses Direct3D 12 and macOS uses Metal.
 
 ---
 
