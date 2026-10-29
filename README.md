@@ -40,6 +40,14 @@ Unpack it, start it on the monitor you want to test and press **ENTER**. Bzzrt r
 its EDID. If it can't find one, or the detected range is wrong, you type in the range before the test starts
 (see [QUICKSTART](packaging/QUICKSTART.txt)). Checksums are in `SHA256SUMS` on the release page.
 
+**Arch Linux and derivatives** (CachyOS, EndeavourOS, Manjaro): build and install the package with
+[`packaging/aur/PKGBUILD`](packaging/aur/PKGBUILD). This adds `vrrdiag` (also as `bzzrt`) and a "Bzzrt" app-menu entry.
+
+```
+git clone https://github.com/Prajwaljb/Bzzrt.git
+cd Bzzrt/packaging/aur && makepkg -si
+```
+
 ## What it does
 
 `vrrdiag` generates **controlled presentation timing** (exact frame intervals, scripted
