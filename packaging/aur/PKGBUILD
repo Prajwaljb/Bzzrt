@@ -1,0 +1,35 @@
+# Maintainer: Prajwal JB <vamprajwal at gmail dot com>
+pkgname=bzzrt
+pkgver=1.1.1
+pkgrel=1
+pkgdesc='VRR flicker test and LFC diagnostic for FreeSync, G-SYNC Compatible and Adaptive-Sync monitors'
+arch=('x86_64' 'aarch64')
+url='https://github.com/Prajwaljb/Bzzrt'
+license=('MIT')
+depends=('gcc-libs' 'glibc' 'libdrm' 'libxcb' 'vulkan-icd-loader' 'wayland')
+makedepends=('cmake' 'glslang' 'pkgconf' 'vulkan-headers' 'wayland-protocols')
+optdepends=('vulkan-driver: Vulkan rendering under Wayland and X11')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('5d7c077e0e621fe094fb1310514af5bc66a51d727937504ee58ed490e869136d')
+
+build() {
+  cmake -B build -S "Bzzrt-$pkgver" -DCMAKE_BUILD_TYPE=None -DCMAKE_INSTALL_PREFIX=/usr -Wno-dev
+  cmake --build build
+}
+
+check() {
+  ./build/vrrdiag --version
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+  cd "Bzzrt-$pkgver"
+  sed 's|@VRRDIAG_BIN@|/usr/bin/vrrdiag|' packaging/linux/vrrdiag-launch.in > vrrdiag-launch
+  install -Dm755 vrrdiag-launch "$pkgdir/usr/bin/vrrdiag-launch"
+  ln -s vrrdiag "$pkgdir/usr/bin/bzzrt"
+  sed 's|@VRRDIAG_LAUNCHER@|/usr/bin/vrrdiag-launch|' packaging/linux/vrrdiag.desktop.in > vrrdiag.desktop
+  install -Dm644 vrrdiag.desktop "$pkgdir/usr/share/applications/vrrdiag.desktop"
+  install -Dm644 packaging/linux/vrrdiag.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/vrrdiag.svg"
+  install -Dm644 README.md docs/VRR_LFC_GUIDE.md packaging/QUICKSTART.txt -t "$pkgdir/usr/share/doc/$pkgname"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

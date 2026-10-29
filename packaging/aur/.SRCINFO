@@ -1,0 +1,24 @@
+pkgbase = bzzrt
+	pkgdesc = VRR flicker test and LFC diagnostic for FreeSync, G-SYNC Compatible and Adaptive-Sync monitors
+	pkgver = 1.1.1
+	pkgrel = 1
+	url = https://github.com/Prajwaljb/Bzzrt
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	makedepends = cmake
+	makedepends = glslang
+	makedepends = pkgconf
+	makedepends = vulkan-headers
+	makedepends = wayland-protocols
+	depends = gcc-libs
+	depends = glibc
+	depends = libdrm
+	depends = libxcb
+	depends = vulkan-icd-loader
+	depends = wayland
+	optdepends = vulkan-driver: Vulkan rendering under Wayland and X11
+	source = bzzrt-1.1.1.tar.gz::https://github.com/Prajwaljb/Bzzrt/archive/refs/tags/v1.1.1.tar.gz
+	sha256sums = 5d7c077e0e621fe094fb1310514af5bc66a51d727937504ee58ed490e869136d
+
+pkgname = bzzrt
