@@ -1229,8 +1229,10 @@ int App::run() {
         const int multiple = haveLastFp_ ? repeatMultiple(interval) : 1;
         for (int k = 1; k < multiple; ++k) {
             const int64_t at = schedTarget + static_cast<int64_t>(std::llround(interval * 1e9 * k / multiple));
+            // Too late: skipped rather than delaying the next frame. Decided before rendering, because a rendered
+            // frame must be presented (a Vulkan swapchain image acquired and never presented is lost for good).
+            if (nowNs() + renderNormalNs_ > at + 1000000) break;
             if (backend_.renderFrame(lastFp_) != RenderResult::Rendered) break;
-            if (nowNs() > at + 1000000) break;  // too late: skipped rather than delaying the next frame
             preciseSleepUntil(at);
             repeatExpectMs_ = interval * 1e3 / multiple;
             backend_.present(lastFp_.frameIndex | kRepeatFrameBit);

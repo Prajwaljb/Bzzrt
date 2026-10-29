@@ -1,5 +1,7 @@
 #include "csv_log.h"
 
+#include <algorithm>
+
 namespace vrr {
 
 static std::string quoted(const std::string& s) {
@@ -50,7 +52,14 @@ void CsvLogger::setDisplayTime(uint64_t frame, int64_t ns) {
     const uint64_t first = pending_.front().frame;
     if (frame < first) return;
     const uint64_t idx = frame - first;
-    if (idx < pending_.size() && pending_[idx].frame == frame) pending_[idx].displayNs = ns;
+    if (idx < pending_.size() && pending_[idx].frame == frame) {
+        pending_[idx].displayNs = ns;
+        return;
+    }
+    // Frame numbers have gaps when frames were skipped (minimized window, lost surface).
+    const auto it = std::lower_bound(pending_.begin(), pending_.end(), frame,
+                                     [](const FrameRecord& r, uint64_t f) { return r.frame < f; });
+    if (it != pending_.end() && it->frame == frame) it->displayNs = ns;
 }
 
 void CsvLogger::flush(size_t keep) {

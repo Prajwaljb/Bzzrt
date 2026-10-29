@@ -199,7 +199,14 @@ bool KmsBackend::setup(const Config& cfg, std::string& err) {
 
     drmModeRes* res = drmModeGetResources(fd_);
     drmModeConnector* conn = drmModeGetConnector(fd_, connId_);
-    if (!res || !conn) return err = "cannot query DRM resources", false;
+    // Freed on every return below, including the error paths.
+    auto freeRes = [&] {
+        if (conn) drmModeFreeConnector(conn);
+        if (res) drmModeFreeResources(res);
+        conn = nullptr;
+        res = nullptr;
+    };
+    if (!res || !conn) return freeRes(), err = "cannot query DRM resources", false;
 
     // CRTC: prefer the one currently driving the connector.
     crtcId_ = 0;
@@ -221,7 +228,7 @@ bool KmsBackend::setup(const Config& cfg, std::string& err) {
     }
     for (int i = 0; i < res->count_crtcs; ++i)
         if (res->crtcs[i] == crtcId_) crtcIndex_ = i;
-    if (!crtcId_) return err = "no CRTC available for " + connName_, false;
+    if (!crtcId_) return freeRes(), err = "no CRTC available for " + connName_, false;
 
     // Mode: requested WxH@Hz, else the preferred resolution at its highest refresh rate.
     int reqW = 0, reqH = 0;
@@ -248,7 +255,7 @@ bool KmsBackend::setup(const Config& cfg, std::string& err) {
         const double r = modeRefresh(m), rb = modeRefresh(conn->modes[best]);
         if (reqHz > 0 ? std::fabs(r - reqHz) < std::fabs(rb - reqHz) : r > rb) best = i;
     }
-    if (best < 0) return err = "requested mode not offered by " + connName_, false;
+    if (best < 0) return freeRes(), err = "requested mode not offered by " + connName_, false;
     mode_ = conn->modes[best];
     width_ = mode_.hdisplay;
     height_ = mode_.vdisplay;
@@ -296,8 +303,7 @@ bool KmsBackend::setup(const Config& cfg, std::string& err) {
         drmModeFreePlane(pl);
     }
     if (planes) drmModeFreePlaneResources(planes);
-    drmModeFreeConnector(conn);
-    drmModeFreeResources(res);
+    freeRes();
     if (!planeId_) return err = "no primary plane with XRGB8888 for the CRTC", false;
     want10_ = want10_ && plane10_;
 

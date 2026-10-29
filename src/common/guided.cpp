@@ -205,6 +205,7 @@ OsdReading interpretOsd(double fps, int osdHz, double refreshHz, double vrrMinHz
 
 std::string osdExpected(double fps, double vrrMinHz, double vrrMaxHz) {
     std::vector<int> hz;
+    if (fps <= 0) return "-";
     for (int k = 1; k * fps <= vrrMaxHz + 0.5; ++k)
         if (k * fps >= vrrMinHz - 0.5) hz.push_back(static_cast<int>(std::lround(k * fps)));
     if (hz.empty()) return "about " + std::to_string(static_cast<int>(std::lround(vrrMinHz))) +

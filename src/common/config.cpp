@@ -1,5 +1,6 @@
 #include "config.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -98,7 +99,7 @@ bool parseArgs(int argc, char** argv, Config& c, std::string& err) {
             if (!need(v)) return false;
             char* end = nullptr;
             out = std::strtod(v, &end);
-            if (!end || *end) {
+            if (end == v || *end || !std::isfinite(out)) {
                 err = "bad number for " + a + ": " + v;
                 return false;
             }
@@ -116,7 +117,7 @@ bool parseArgs(int argc, char** argv, Config& c, std::string& err) {
         else if (a == "--version" || a == "-V") c.version = true;
         else if (a == "--api") { if (!str(c.api)) return false; }
         else if (a == "--wsi") { if (!str(c.wsi)) return false; }
-        else if (a == "--gpu") { if (!num(d)) return false; c.gpuIndex = static_cast<int>(d); }
+        else if (a == "--gpu") { if (!num(d)) return false; if (d < 0 || d > 64) return err = "bad --gpu", false; c.gpuIndex = static_cast<int>(d); }
         else if (a == "--present") { if (!str(c.presentMode)) return false; }
         else if (a == "--10bit") c.tenBit = true;
         else if (a == "--8bit") c.tenBit = false;
@@ -136,7 +137,7 @@ bool parseArgs(int argc, char** argv, Config& c, std::string& err) {
         else if (a == "--start") { c.autostart = true; c.advanced = true; }
         else if (a == "--duration") { if (!num(c.durationSec)) return false; }
         else if (a == "--exit-after") c.exitAfter = true;
-        else if (a == "--seed") { if (!num(d)) return false; c.params.seed = static_cast<uint64_t>(d); }
+        else if (a == "--seed") { if (!num(d)) return false; if (d < 0 || d >= 1.8e19) return err = "bad --seed", false; c.params.seed = static_cast<uint64_t>(d); }
         else if (a == "--idle-fps") { if (!num(c.idleFps)) return false; }
         else if (a == "--vrr-min") { if (!num(c.vrrMinHz)) return false; }
         else if (a == "--vrr-max") { if (!num(c.vrrMaxHz)) return false; }
@@ -146,7 +147,7 @@ bool parseArgs(int argc, char** argv, Config& c, std::string& err) {
         else if (a == "--spike-rate") { if (!num(c.params.spikeRateHz)) return false; }
         else if (a == "--spike-min") { if (!num(c.params.spikeMinMs)) return false; }
         else if (a == "--spike-max") { if (!num(c.params.spikeMaxMs)) return false; }
-        else if (a == "--spike-frames") { if (!num(d)) return false; c.params.spikeFrames = static_cast<int>(d); }
+        else if (a == "--spike-frames") { if (!num(d)) return false; if (d < 1 || d > 1000) return err = "bad --spike-frames", false; c.params.spikeFrames = static_cast<int>(d); }
         else if (a == "--drop-rate") { if (!num(c.params.dropRateHz)) return false; }
         else if (a == "--drop-duration") { if (!num(c.params.dropDurationSec)) return false; }
         else if (a == "--drop-min") { if (!num(c.params.dropMinFps)) return false; }
@@ -156,7 +157,7 @@ bool parseArgs(int argc, char** argv, Config& c, std::string& err) {
         else if (a == "--lows-avg") { if (!num(c.params.lowsAvgFps)) return false; }
         else if (a == "--lows-fps") { if (!num(c.params.lowsFps)) return false; }
         else if (a == "--lows-percent") { if (!num(c.params.lowsPercent)) return false; }
-        else if (a == "--pattern") { if (!num(d)) return false; c.pattern = static_cast<int>(d); c.patternGiven = true; }
+        else if (a == "--pattern") { if (!num(d)) return false; c.pattern = d >= 0 && d < kPatCount ? static_cast<int>(d) : -1; c.patternGiven = true; }
         else if (a == "--image") { if (!str(c.imagePath)) return false; }
         else if (a == "--no-overlay") c.overlay = false;
         else if (a == "--counter") c.frameCounter = true;
@@ -179,6 +180,7 @@ bool parseArgs(int argc, char** argv, Config& c, std::string& err) {
         return err = "bad VRR range (--vrr-min must be below --vrr-max)", false;
     if (c.lfcFps < 0 || c.lfcFps > 1000) return err = "bad --lfc-threshold", false;
     if (c.idleFps <= 0) return err = "bad --idle-fps", false;
+    if (c.durationSec < 0) return err = "bad --duration", false;
     if (c.params.customFps <= 0 || c.params.lowsAvgFps <= 0 || c.params.lowsFps <= 0)
         return err = "FPS values must be positive", false;
     if (c.params.spikeMinMs <= 0 || c.params.spikeMaxMs < c.params.spikeMinMs) return err = "bad spike range", false;

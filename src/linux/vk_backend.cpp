@@ -826,7 +826,7 @@ RenderResult VulkanBackend::renderFrame(const FrameParams& p) {
         return RenderResult::Skipped;
     }
     if (r == VK_TIMEOUT || r == VK_NOT_READY) return RenderResult::Skipped;
-    if (r == VK_ERROR_SURFACE_LOST_KHR || r == VK_ERROR_DEVICE_LOST) {
+    if (r < 0) {  // surface or device lost, out of memory: no image was acquired
         std::fprintf(stderr, "vkAcquireNextImageKHR: %s\n", vkResultName(r));
         return RenderResult::Fatal;
     }
