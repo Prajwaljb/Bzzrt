@@ -43,7 +43,7 @@ struct Config {
     bool version = false;
 };
 
-constexpr const char* kVersion = "1.1.0";
+constexpr const char* kVersion = "1.1.1";
 
 // Returns false on error (message in err).
 bool parseArgs(int argc, char** argv, Config& cfg, std::string& err);
