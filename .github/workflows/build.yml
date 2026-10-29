@@ -43,12 +43,13 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:base-devel
     steps:
-      - uses: actions/checkout@v4
+      # git first, so the checkout is a real repository that git archive can read.
       - name: Dependencies
         run: |
           pacman -Syu --noconfirm --needed git cmake glslang pkgconf vulkan-headers wayland-protocols \
             libdrm libxcb vulkan-icd-loader wayland
           useradd -m builder
+      - uses: actions/checkout@v4
       - name: Build package
         run: |
           VERSION=$(sed -n 's/^project(vrrdiag VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
