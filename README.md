@@ -32,16 +32,18 @@
 
 | Platform | Package | Needs |
 |---|---|---|
-| 🪟 **Windows** 10/11 x64 | [`bzzrt-…-windows-x64.zip`](https://github.com/Prajwaljb/Bzzrt/releases/latest) | D3D12 or D3D11 GPU |
-| 🐧 **Linux** x86_64 | [`bzzrt-…-linux-x86_64.tar.gz`](https://github.com/Prajwaljb/Bzzrt/releases/latest) | Vulkan driver, glibc 2.34+ (Ubuntu 22.04+, Fedora 35+, Arch) |
-| 🍎 **macOS** 12+ Apple silicon | [`bzzrt-…-macos-arm64.zip`](https://github.com/Prajwaljb/Bzzrt/releases/latest) | not notarized: allow it once under System Settings → Privacy & Security → *Open Anyway* |
+| 🪟 **Windows** 10/11 x64 | [`bzzrt-1.1.1-windows-x64.zip`](https://github.com/Prajwaljb/Bzzrt/releases/download/v1.1.1/bzzrt-1.1.1-windows-x64.zip) | D3D12 or D3D11 GPU |
+| 🐧 **Linux** x86_64 | [`bzzrt-1.1.1-linux-x86_64.tar.gz`](https://github.com/Prajwaljb/Bzzrt/releases/download/v1.1.1/bzzrt-1.1.1-linux-x86_64.tar.gz) | Vulkan driver, glibc 2.34+ (Ubuntu 22.04+, Fedora 35+, Arch) |
+| 🏔️ **Arch Linux** x86_64 | [`bzzrt-1.1.1-1-x86_64.pkg.tar.zst`](https://github.com/Prajwaljb/Bzzrt/releases/download/v1.1.1/bzzrt-1.1.1-1-x86_64.pkg.tar.zst) | `sudo pacman -U` it (see below); CachyOS, EndeavourOS, Manjaro too |
+| 🍎 **macOS** 12+ Apple silicon | [`bzzrt-1.1.1-macos-arm64.zip`](https://github.com/Prajwaljb/Bzzrt/releases/download/v1.1.1/bzzrt-1.1.1-macos-arm64.zip) | not notarized: allow it once under System Settings → Privacy & Security → *Open Anyway* |
 
 Unpack it, start it on the monitor you want to test and press **ENTER**. Bzzrt reads the monitor's VRR range from
 its EDID. If it can't find one, or the detected range is wrong, you type in the range before the test starts
-(see [QUICKSTART](packaging/QUICKSTART.txt)). Checksums are in `SHA256SUMS` on the release page.
+(see [QUICKSTART](packaging/QUICKSTART.txt)). Checksums, release notes and older versions are on the
+[releases page](https://github.com/Prajwaljb/Bzzrt/releases/latest).
 
-**Arch Linux and derivatives** (CachyOS, EndeavourOS, Manjaro): install the ready-made package from the
-[latest release](https://github.com/Prajwaljb/Bzzrt/releases/latest). This adds `vrrdiag` (also as `bzzrt`) and a
+**Arch Linux and derivatives** (CachyOS, EndeavourOS, Manjaro): install the package from the table with
+pacman instead of unpacking anything. This adds `vrrdiag` (also as `bzzrt`) and a
 "Bzzrt" app-menu entry.
 
 ```
